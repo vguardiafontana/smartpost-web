@@ -1,0 +1,100 @@
+{
+  "desktop_report_batch_500": {
+    "seconds": [
+      4.095190299998649,
+      3.3034110000007786,
+      3.2754190000014205
+    ],
+    "median": 3.3034110000007786,
+    "result": {
+      "reports": {
+        "ZETABURGOS": "C:\\Users\\valen\\.codex\\.chatgpt-projects\\g-p-6ac813a5cba48191b103b2e75dfd5392\\performance\\com-before\\reports\\08-10-2026\\ZETABURGOS 08-10-26.xlsx"
+      },
+      "seller_audits": {
+        "ZETABURGOS": {
+          "original_rows": 500,
+          "removed_-01": 0,
+          "final_rows": 500,
+          "duplicate_identical_removed": 0,
+          "duplicate_conflicts": [],
+          "services": {
+            "FLEX": 300,
+            "SAMEDAY": 200
+          },
+          "remitos_47": 100,
+          "unknown_services": [],
+          "states": {
+            "1RVT - 1\u00b0 VISITA": 167,
+            "ENTREGADO": 167,
+            "REPROGRAMACI\u00d3N": 166
+          },
+          "ambiguous_states": [
+            "REPROGRAMACI\u00d3N"
+          ],
+          "gestion": {
+            "VISITA COORDINADA CON EL CLIENTE": 167,
+            "N/A": 333
+          },
+          "selected_run_date": "08-10-2026",
+          "cache": "generated",
+          "source_files": [
+            "visits.csv"
+          ],
+          "source_hashes": [
+            "25615a45affe6a97d8b7f08eecc2c99371837fe90461900fec3cee87a696d928"
+          ],
+          "missing_columns": [],
+          "duplicate_headers": [],
+          "seller_evidence": [
+            {
+              "file": "visits.csv",
+              "evidence": {
+                "Cliente": [
+                  "ZETABURGOS"
+                ]
+              }
+            }
+          ],
+          "excel": {
+            "base_rows": 500,
+            "report_rows": 500,
+            "formula_errors": 0,
+            "errors": [],
+            "logo_count": 1,
+            "table": "ReporteTable A1:Q501",
+            "aux_visible": true,
+            "freeze_panes": false,
+            "regression_guards": {
+              "timezone_shift": "checked",
+              "all_non_numeric_operational_columns_as_text": "checked",
+              "leading_zero_and_punctuation_preservation": "checked",
+              "embedded_newlines": "preserved by CSV parser / exact base audit",
+              "trailing_spaces": "trimmed only at field edges",
+              "hash_remito_formula": "checked"
+            }
+          }
+        }
+      },
+      "blocked": [],
+      "performance": {
+        "input_read_seconds": 0.109,
+        "generation_seconds": 2.772,
+        "total_seconds": 3.221
+      }
+    }
+  },
+  "desktop_visits_500": {
+    "seconds": [
+      0.8038467000005767,
+      0.8052934000006644,
+      0.8048980999992636
+    ],
+    "median": 0.8048980999992636,
+    "result": {
+      "status": "generated",
+      "path": "C:\\Users\\valen\\.codex\\.chatgpt-projects\\g-p-6ac813a5cba48191b103b2e75dfd5392\\performance\\com-before\\reports\\08-10-2026\\VISITAS 08-10-26.xlsx",
+      "rows": 500,
+      "columns": 75
+    }
+  }
+}

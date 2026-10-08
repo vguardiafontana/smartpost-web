@@ -1,0 +1,30 @@
+{
+  "before": [
+    {
+      "seconds": 6.923074299997097,
+      "peak_working_set_bytes": 56500224
+    },
+    {
+      "seconds": 6.832103200002166,
+      "peak_working_set_bytes": 56164352
+    },
+    {
+      "seconds": 6.875201200000447,
+      "peak_working_set_bytes": 56348672
+    }
+  ],
+  "after": [
+    {
+      "seconds": 0.39890209999794024,
+      "peak_working_set_bytes": 56287232
+    },
+    {
+      "seconds": 0.40237079999860725,
+      "peak_working_set_bytes": 56164352
+    },
+    {
+      "seconds": 0.3998401000026206,
+      "peak_working_set_bytes": 56201216
+    }
+  ]
+}

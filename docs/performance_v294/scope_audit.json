@@ -1,0 +1,69 @@
+{
+  "changed_production_files": [
+    "app/core/config.py",
+    "app/procesamiento/io_sources.py",
+    "app/reportes/portable_report.py"
+  ],
+  "protected_paths": {
+    "app/cambio_estado_v2": {
+      "files": 2,
+      "unchanged": true
+    },
+    "app/cambio_estado": {
+      "files": 3,
+      "unchanged": true
+    },
+    "app/descarga": {
+      "files": 5,
+      "unchanged": true
+    },
+    "app/busqueda_guias": {
+      "files": 2,
+      "unchanged": true
+    },
+    "app/delivery": {
+      "files": 3,
+      "unchanged": true
+    },
+    "app/visitas": {
+      "files": 5,
+      "unchanged": true
+    },
+    "app/gui": {
+      "files": 11,
+      "unchanged": true
+    },
+    "app/web": {
+      "files": 14,
+      "unchanged": true
+    },
+    "app/core/dates.py": {
+      "files": 1,
+      "unchanged": true
+    },
+    "assets": {
+      "files": 3,
+      "unchanged": true
+    },
+    "config.default.yaml": {
+      "files": 1,
+      "unchanged": true
+    },
+    "requirements.txt": {
+      "files": 1,
+      "unchanged": true
+    },
+    "requirements-web.txt": {
+      "files": 1,
+      "unchanged": true
+    },
+    "Dockerfile": {
+      "files": 1,
+      "unchanged": true
+    },
+    "render.yaml": {
+      "files": 1,
+      "unchanged": true
+    }
+  }
+}

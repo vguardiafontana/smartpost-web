@@ -1,0 +1,21 @@
+{
+  "web_report": [],
+  "web_visits": [],
+  "ZETABURGOS 08-10-26.xlsx": {
+    "differences": [],
+    "normalized_excel_metadata_or_calculation_chain": [
+      "xl/workbook.xml",
+      "xl/tables/table1.xml",
+      "xl/calcChain.xml",
+      "docProps/core.xml"
+    ]
+  },
+  "VISITAS 08-10-26.xlsx": {
+    "differences": [],
+    "normalized_excel_metadata_or_calculation_chain": [
+      "xl/workbook.xml",
+      "xl/worksheets/sheet1.xml",
+      "docProps/core.xml"
+    ]
+  }
+}

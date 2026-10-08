@@ -1,0 +1,2 @@
+Suite final: 129 passed, 6 warnings in 42.67s. Sin pruebas omitidas.
+Ejecutada desde smartpost-opt con SMARTPOST_TEST_BROWSER apuntando a Chromium local.

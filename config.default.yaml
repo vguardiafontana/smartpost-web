@@ -1,0 +1,299 @@
+app:
+  version: 2.5.0-desktop
+  prompt_sha256: 29f9fcc4d3ac37cf08a53da071a87a1b58c074b406bb8440dea04561d85c676c
+  template_sha256: 9c26f469c7b0489cc6bc016b6864853d2ef2c1056ef3a7b8f52ce2a883b2277d
+  archive_raw: true
+  raw_retention_days: 30
+  keep_failed_workdir: true
+  first_run_complete: false
+paths:
+  prompt: assets/PROMPT_MAESTRO.md
+  template: assets/TEMPLATE_REPORTE.xlsx
+  work: runtime/work
+  logs: runtime/logs
+  state_db: runtime/state.sqlite3
+  epresis_profile: runtime/profiles/epresis
+  whatsapp_profile: runtime/profiles/whatsapp
+  reports: output/reportes
+  raw_history: output/historico
+  dry_run_reports: output/pruebas
+  denuncias_profile: runtime/profiles/denuncias
+  denuncias_output: output/denuncias
+epresis:
+  base_url: https://smartpostecommerce.epresis.com
+  login_url: https://smartpostecommerce.epresis.com/login
+  guides_url: https://smartpostecommerce.epresis.com/guias/multiitems/listado
+  client_search_path: /clientes/clientes/combo
+  filter_path: /guias/filter
+  export_path: /guias/exportarExcel
+  headless: true
+  perform_filter_before_export: true
+  max_concurrent_requests: 4
+  poll_interval_seconds: 4.0
+  poll_timeout_seconds: 300
+  request_timeout_ms: 30000
+  skip_header_only_files: true
+  export_min_interval_seconds: 2.7
+  rate_limit_max_retries: 8
+  rate_limit_base_delay_seconds: 2.0
+  rate_limit_max_delay_seconds: 20.0
+  no_data_recheck_after_seconds: 12.0
+  no_data_recheck_every_seconds: 12.0
+  unknown_export_stall_seconds: 75.0
+reportes:
+  safety:
+    block_conflicting_duplicates: true
+    block_missing_critical_columns: true
+    block_formula_errors: true
+    block_structure_mismatch: true
+    block_unknown_service: false
+    block_ambiguous_state: false
+  create_zip: true
+  cache_enabled: true
+  saturday_sellers:
+  - ZETABURGOS
+  - GIANGIU
+  - G-COMMERCE
+  - PINTURERIAS MM / TIMARO
+  - TECNONUBEL
+  - CLASS
+  - PINTURERIA MILCOLORES
+visitas:
+  enabled: true
+  whatsapp_group: CONSULTAS / Operación nocturna
+  whatsapp_message: ''
+  filename: VISITAS {date_short}.xlsx
+  estados:
+  - id: 127
+    name: 1° VISITA
+  - id: 119
+    name: 2° VISITA
+  - id: 183
+    name: 3° VISITA
+  - id: 48
+    name: DIRECCIÓN INCORRECTA
+  - id: 51
+    name: RECHAZADO POR DESTINATARIO
+  - id: 117
+    name: REPROGRAMACIÓN
+  - id: 63
+    name: ZONA PELIGROSA - DIFICIL ACCESO
+cambio_estado:
+  enabled: true
+  arrival_path: /guias/arribo_paquetes
+  change_path: /guias/arribo_paquetes-cambio-estado
+  remito_search_path: /tracker/searchByRemitoCliente
+  guia_agente_search_path: /tracker/searchByGuiaAgente
+busqueda_guias:
+  enabled: true
+  distributor_search_path: /distribuidores/lista-distribuidores
+  distributor_excel_path: /distribuidores/excelDistribuidores
+whatsapp:
+  browser: chromium
+  auto_send: true
+  company_chat_list: Smart Post
+  attachment_caption: Buenas noches, adjunto el reporte del día {date}.
+  performance:
+    ui_poll_ms: 50
+    search_result_timeout_ms: 15000
+    search_attempts: 2
+    search_retry_pause_ms: 800
+    pending_retry_pause_ms: 1800
+    header_timeout_ms: 5000
+    attachment_menu_timeout_ms: 2500
+    preview_timeout_ms: 6000
+    between_sends_ms: 150
+    screenshot_preview: true
+    screenshot_sent: false
+    send_commit_timeout_ms: 4500
+    post_send_fallback_ms: 500
+    final_visitas_close_delay_ms: 5000
+sellers:
+- seller: ENVIO PACK
+  enabled: true
+  cliente_id: 191
+  expected_empresa: ENVIO PACK
+  search_terms:
+  - ENVIO PACK
+  - ENVIO
+  aliases:
+  - ENVIOPACK
+  whatsapp_group: ''
+  date_mode: single_day
+- seller: ZETABURGOS
+  enabled: true
+  cliente_id: 89
+  expected_empresa: ZETABURGOS SRL
+  search_terms:
+  - ZETABURGOS
+  aliases:
+  - ZETABURGOS SRL
+  - ZETABURGOS S.R.L.
+  whatsapp_group: ''
+  date_mode: single_day
+- seller: GIANGIU
+  enabled: true
+  cliente_id: 122
+  expected_empresa: GIANGIU (XTCOMUNICACIONES)
+  search_terms:
+  - GIANGIU
+  - XTCOMUNICACIONES
+  aliases:
+  - GIANGIU (XTCOMUNICACIONES)
+  - GIANGIU (XT COMUNICACIONES)
+  - GIANGIU XTCOMUNICACIONES
+  whatsapp_group: ''
+  date_mode: single_day
+- seller: ENOTEK
+  enabled: true
+  cliente_id: 20
+  expected_empresa: ONYX MEDIA S.A
+  search_terms:
+  - ENOTEK
+  - ONYX MEDIA
+  aliases:
+  - ONYX MEDIA S.A
+  - ONYX MEDIA SA
+  whatsapp_group: ''
+  date_mode: single_day
+- seller: JAGUAR
+  enabled: true
+  cliente_id: 4
+  expected_empresa: PRIMER ROUND SRL
+  search_terms:
+  - JAGUAR
+  - PRIMER ROUND
+  aliases:
+  - PRIMER ROUND SRL
+  - PRIMER ROUND S.R.L.
+  - PRIMER ROUND S R L
+  whatsapp_group: ''
+  date_mode: single_day
+- seller: FARMALAND
+  enabled: true
+  cliente_id: 195
+  expected_empresa: FARMALAND - NUTRISUPLE S.A.S.
+  search_terms:
+  - FARMALAND
+  - NUTRISUPLE
+  aliases:
+  - FARMALAND-NUTRISUPLE
+  - FARMALAND NUTRISUPLE
+  whatsapp_group: ''
+  date_mode: single_day
+- seller: ONECLICK
+  enabled: true
+  cliente_id: 199
+  expected_empresa: ONECLICK ARGENTINO S.R.L.
+  search_terms:
+  - ONECLICK
+  - ONE CLICK
+  aliases:
+  - ONE CLICK
+  whatsapp_group: ''
+  date_mode: single_day
+- seller: G-COMMERCE
+  enabled: true
+  cliente_id: 201
+  expected_empresa: G-COMMERCE S.A.
+  search_terms:
+  - G-COMMERCE
+  - G COMMERCE
+  aliases:
+  - G-COMMERCE S.A.
+  - G-COMMERCE SA
+  - G COMMERCE S A
+  whatsapp_group: ''
+  date_mode: single_day
+- seller: PINTURERIAS MM / TIMARO
+  enabled: true
+  cliente_id: 207
+  expected_empresa: PINTURERIAS MM TIMARO S.R.L
+  search_terms:
+  - TIMARO
+  - PINTURERIAS MM
+  aliases:
+  - PINTURERIAS MM - TIMARO
+  - PINTURERIAS MM TIMARO S.R.L.
+  - PINTURERIAS MM TIMARO SRL
+  - PINTURERIA MM TIMARO
+  whatsapp_group: ''
+  date_mode: single_day
+- seller: TECNONUBEL
+  enabled: true
+  cliente_id: 210
+  expected_empresa: TECNONUBEL - MARCELO FABIAN MAUCERI
+  search_terms:
+  - TECNONUBEL
+  aliases: []
+  whatsapp_group: ''
+  date_mode: single_day
+- seller: CLASS
+  enabled: true
+  cliente_id: 211
+  expected_empresa: CATACHULE S.A. - CLASS EXPRESS
+  search_terms:
+  - CLASS
+  aliases:
+  - CATACHULE S.A. - CLASS EXPRESS
+  - CATACHULE SA - CLASS EXPRESS
+  whatsapp_group: ''
+  date_mode: single_day
+- seller: PINTURERIAS SAN ANTONIO
+  enabled: true
+  cliente_id: 215
+  expected_empresa: LUPATINI Y CIA SA - PINTURERIA SAN ANTONIO
+  search_terms:
+  - PINTURERIA SAN ANTONIO
+  - SAN ANTONIO
+  - LUPATINI
+  aliases:
+  - PINTURERIA SAN ANTONIO
+  - LUPATINI Y CIA SA - PINTURERIA SAN ANTONIO
+  - LUPATINI Y CIA SA PINTURERIA SAN ANTONIO
+  - LUPATINI Y CIA S.A. - PINTURERIA SAN ANTONIO
+  - LUPATINI Y CIA
+  whatsapp_group: ''
+  date_mode: single_day
+- seller: PINTURERIA MILCOLORES
+  enabled: true
+  cliente_id: 217
+  expected_empresa: PINTURERIA MILCOLORES
+  search_terms:
+  - PINTURERIA MILCOLORES
+  - MILCOLORES
+  aliases:
+  - PINTURERIAS MILCOLORES
+  whatsapp_group: ''
+  date_mode: single_day
+- seller: APOLLO
+  enabled: true
+  cliente_id: 88
+  expected_empresa: APOLLO SRL
+  search_terms:
+  - APOLLO
+  aliases:
+  - APOLLO SRL
+  - APOLLO S.R.L.
+  whatsapp_group: ''
+  date_mode: month_to_selected
+denuncias:
+  enabled: true
+  gba_url: https://seguridad.gba.gob.ar/#/robo-otros
+  whatsapp_group: CONSULTAS / Operación nocturna
+  default_time: '21:00'
+  captcha_timeout_seconds: 600
+  final_pdf_timeout_seconds: 600
+  dry_run_review_ms: 15000
+  distributor_search_path: /distribuidores/lista-distribuidores
+  seller_message_singular: Buenas noches, lamentamos informar que el siguiente envío, remito {remito}, se encuentra en estado
+    siniestrado. Adjuntamos la denuncia correspondiente.
+  seller_message_plural: 'Buenas noches, lamentamos informar que los siguientes envíos se encuentran en estado siniestrado:
+
+
+    {remitos}
+
+
+    Adjuntamos la denuncia correspondiente.'
+  driver_profiles: {}
+  seller_groups: []

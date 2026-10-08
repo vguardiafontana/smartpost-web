@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="SmartPost">
+  <link rel="manifest" href="/static/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/static/icon-180.png">
+  <link rel="stylesheet" href="/static/app.css">
+  <title>SmartPost</title>
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div><div class="eyebrow">SMARTPOST WEB</div><h1 id="pageTitle">SmartPost</h1></div>
+      <button id="logoutBtn" class="ghost hidden">Salir</button>
+    </header>
+
+    <section id="loginView" class="card login-card hidden">
+      <h2>Ingresar</h2>
+      <p class="muted">Acceso privado. Ingresá tu PIN.</p>
+      <form id="loginForm">
+        <input id="pinInput" inputmode="numeric" autocomplete="one-time-code" type="password" maxlength="64" placeholder="PIN" required>
+        <button class="primary full" type="submit">Entrar</button>
+      </form>
+      <p id="loginError" class="error"></p>
+    </section>
+
+    <section id="appView" class="hidden">
+      <div id="homeStep" class="stack">
+        <section class="card">
+          <div class="eyebrow">MÓDULOS</div>
+          <h2>¿Qué querés hacer?</h2>
+          <div class="module-grid">
+            <button id="openV2Btn" class="module-btn"><strong>Cambio de estado v2</strong><span>Rendición de choferes</span></button>
+            <button id="openSearchBtn" class="module-btn"><strong>Búsqueda de guías</strong><span>Guías, remitos y guía agente</span></button>
+            <button id="openReportsBtn" class="module-btn"><strong>Reportes y Visitas</strong><span>Generar y descargar archivos</span></button>
+            <button id="openVisitPhotosBtn" class="module-btn"><strong>Visitas sin foto</strong><span>Visitas de hoy, con o sin foto</span></button>
+          </div>
+        </section>
+      </div>
+
+      <div id="visitPhotosStep" class="stack hidden">
+        <button class="back-link" data-home>← Inicio</button>
+        <section class="card">
+          <h2>Visitas sin foto</h2>
+          <p class="muted">Pedidos ingresados hoy a planta · Primera, segunda y tercera visita y reprogramación.</p>
+          <label>Visitas con foto</label>
+          <div class="row-actions visit-photo-choice" role="group" aria-label="Visitas con foto">
+            <button id="visitPhotoYes" class="secondary" aria-pressed="false">Sí</button>
+            <button id="visitPhotoNo" class="primary" aria-pressed="true">No</button>
+          </div>
+          <button id="queryVisitPhotos" class="primary full">Consultar visitas de hoy</button>
+          <p id="visitPhotosProgress" class="muted" role="status" aria-live="polite"></p>
+        </section>
+        <section id="visitPhotosResults" class="card hidden">
+          <p id="visitPhotosSummary" class="meta"></p>
+          <div id="visitPhotosRows" class="rows"></div>
+          <details id="visitPhotosUnknown" class="hidden"><summary id="visitPhotosUnknownTitle"></summary><p class="muted">Estas guías no se incluyen en Sí ni en No. Volvé a consultar para verificarlas.</p><div id="visitPhotosUnknownRows" class="rows"></div></details>
+        </section>
+      </div>
+
+      <div id="composeStep" class="stack hidden">
+        <button class="back-link" data-home>← Inicio</button>
+        <section class="card">
+          <label for="bulkInput">Guías, remitos o guía agente</label>
+          <textarea id="bulkInput" rows="7" placeholder="Pegá una o varias, una debajo de otra"></textarea>
+          <label for="stateSelect">Estado nuevo</label>
+          <select id="stateSelect"></select>
+          <button id="previewBtn" class="primary full">Ver vista previa</button>
+        </section>
+      </div>
+
+      <div id="previewStep" class="stack hidden">
+        <section class="card">
+          <div class="section-head"><div><div class="eyebrow">VISTA PREVIA</div><h2 id="previewTitle">Revisá antes de confirmar</h2></div></div>
+          <div id="previewMeta" class="meta"></div>
+          <div id="previewRows" class="rows"></div>
+          <div class="sticky-actions">
+            <button id="backBtn" class="secondary">Volver</button>
+            <button id="confirmBtn" class="danger">Confirmar cambio</button>
+          </div>
+        </section>
+      </div>
+
+      <div id="jobStep" class="stack hidden">
+        <section class="card">
+          <div class="eyebrow">PROCESO</div>
+          <h2 id="jobTitle">Procesando…</h2>
+          <div class="progress-track"><div id="progressBar" class="progress-bar"></div></div>
+          <div id="progressText" class="muted small">Preparando…</div>
+          <p class="muted small">Podés bloquear el iPhone o cerrar Safari. El servidor sigue trabajando.</p>
+        </section>
+        <section id="summaryCard" class="card hidden">
+          <div class="eyebrow">RESUMEN</div>
+          <div id="summaryGrid" class="summary-grid"></div>
+          <div id="resultRows" class="rows"></div>
+          <button id="retryBtn" class="primary full hidden">Reintentar solo errores</button>
+          <button id="newBatchBtn" class="secondary full">Nuevo lote</button>
+          <button class="back-link full" data-home>← Volver al inicio</button>
+        </section>
+      </div>
+
+
+      <div id="reportsStep" class="stack hidden">
+        <button class="back-link" data-home>← Inicio</button>
+        <section class="card">
+          <div class="eyebrow">REPORTES Y VISITAS</div>
+          <h2>Generar archivos</h2>
+          <label for="reportsDate">Fecha</label>
+          <input id="reportsDate" type="date">
+          <button id="generateReportsBtn" class="primary full">Generar reportes</button>
+          <p class="muted small">No se envía nada por WhatsApp. Solo se generan los archivos y los mensajes para copiar.</p>
+        </section>
+        <section id="reportsProgressCard" class="card hidden">
+          <div class="eyebrow">PROCESO</div>
+          <h2 id="reportsJobTitle">Generando…</h2>
+          <div class="progress-track"><div id="reportsProgressBar" class="progress-bar"></div></div>
+          <div id="reportsProgressText" class="muted small">Preparando…</div>
+          <p class="muted small">Podés bloquear el iPhone. El servidor sigue trabajando.</p>
+        </section>
+        <section id="reportsResultsCard" class="card hidden">
+          <div class="eyebrow">ARCHIVOS LISTOS</div>
+          <div id="reportsMeta" class="meta"></div>
+          <div id="reportsRows" class="rows"></div>
+          <button id="retryReportsBtn" class="primary full hidden">Reintentar generación</button>
+        </section>
+      </div>
+
+      <div id="searchStep" class="stack hidden">
+        <button class="back-link" data-home>← Inicio</button>
+        <section class="card">
+          <div class="eyebrow">BÚSQUEDA DE GUÍAS</div>
+          <h2>Consultar envíos</h2>
+          <label for="searchInput">Guías, remitos o guía agente</label>
+          <textarea id="searchInput" rows="7" placeholder="Pegá una o varias, una debajo de otra"></textarea>
+          <button id="searchBtn" class="primary full">Buscar</button>
+        </section>
+        <section id="searchResultsCard" class="card hidden">
+          <div id="searchSummary" class="meta"></div>
+          <div class="search-sort-row"><span>Ordenar por</span><button id="searchPhotoSort" class="sort-header" type="button">Foto ↕</button></div>
+          <div id="searchRows" class="rows"></div>
+        </section>
+      </div>
+    </section>
+
+    <div id="toast" class="toast hidden"></div>
+  </main>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>

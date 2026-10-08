@@ -1,0 +1,5 @@
+-r ../requirements.txt
+PyInstaller>=6.10,<7
+pyinstaller-hooks-contrib>=2025.0
+pytest>=8,<9
+Pillow>=10,<12
