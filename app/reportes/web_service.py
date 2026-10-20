@@ -79,7 +79,7 @@ def _read_xlsx_portable(path: Path) -> tuple[list[str], list[list[Any]]]:
     wb = load_workbook(path, read_only=True, data_only=True)
     try:
         ws = wb.worksheets[0]
-        data = [[cell.value for cell in row] for row in ws.iter_rows()]
+        data = [list(row) for row in ws.iter_rows(values_only=True)]
     finally:
         wb.close()
     # Reuse the same header detector through a temporary CSV-like matrix path.

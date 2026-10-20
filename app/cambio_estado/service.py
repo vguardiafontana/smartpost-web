@@ -154,6 +154,13 @@ async def _post_form(context, url: str, form: dict[str, str], referer: str, time
 
 
 async def _filter_guide(api: EpresisAPI, guide: str):
+    from copy import deepcopy
+    cache = getattr(api, "_guide_cache", None)
+    if cache is None:
+        cache = api._guide_cache = {}
+    key = str(guide).strip()
+    if key in cache:
+        return deepcopy(cache[key])
     payload = {name: "" for name in FILTER_FIELDS}
     payload["_token"] = api.csrf
     payload["nroGuia_desde"] = str(guide)
@@ -171,8 +178,15 @@ async def _filter_guide(api: EpresisAPI, guide: str):
     for row in rows:
         rid = str(row.get("id") or row.get("retiro_id") or "").strip()
         if rid == str(guide).strip():
+            cache[key] = deepcopy(row)
             return row
-    return rows[0] if len(rows) == 1 else None
+    row = rows[0] if len(rows) == 1 else None
+    cache[key] = deepcopy(row)
+    if row:
+        rid = str(row.get("id") or row.get("retiro_id") or "").strip()
+        if rid:
+            cache[rid] = deepcopy(row)
+    return row
 
 
 async def _resolve_one(context, api: EpresisAPI, csrf: str, settings: dict, arrival_url: str, value: str, logger) -> ResolvedGuide:
@@ -266,10 +280,16 @@ async def analyze_identifiers(cfg: dict, identifiers: list[str], logger) -> list
 
             out: list[ResolvedGuide] = []
             seen_retiros: dict[int, str] = {}
+            from app.core.async_utils import ordered_map
+            resolved_inputs = await ordered_map(
+                identifiers, lambda value: _resolve_one(context, api, csrf, settings, arrival_url, value, logger)
+            )
             for idx, value in enumerate(identifiers, start=1):
                 logger.info("[CAMBIO ESTADO] Analizando %s/%s: %s", idx, len(identifiers), value)
                 try:
-                    item = await _resolve_one(context, api, csrf, settings, arrival_url, value, logger)
+                    item = resolved_inputs[idx - 1]
+                    if isinstance(item, BaseException):
+                        raise item
                 except Exception as exc:
                     item = ResolvedGuide(input_value=value, resolution_status="error", message=str(exc))
                 if item.retiro_id is not None and item.resolution_status == "resolved":

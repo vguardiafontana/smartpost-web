@@ -21,6 +21,7 @@ from app.cambio_estado.service import analyze_identifiers, extract_identifiers
 from app.cambio_estado.states import STATES, STATE_BY_ID
 from app.busqueda_guias.service import search_shipments
 from app.core.config import load_config, resolve_path
+from app.core.dates import operation_date
 from app.core.logging import setup_logging
 from app.web.jobs import JobManager
 from app.web.report_jobs import ReportJobManager
@@ -44,6 +45,7 @@ class LoginBody(BaseModel):
 class PreviewBody(BaseModel):
     text: str = Field(default="", max_length=20000)
     state_id: int
+    date: str | None = None
 
 
 class ConfirmBody(BaseModel):
@@ -191,12 +193,12 @@ def create_app(
             datetime.strptime(body.date, "%Y-%m-%d")
         except ValueError:
             raise HTTPException(status_code=400, detail="Fecha inválida")
-        return report_manager.create_job(body.date)
+        return await asyncio.to_thread(report_manager.create_job, body.date)
 
     @app.get("/api/report-jobs/{job_id}")
     async def get_report_job(job_id: str, smartpost_session: str | None = Cookie(default=None, alias=COOKIE_NAME)) -> dict[str, Any]:
         require_auth(smartpost_session)
-        job = report_manager.get_job(job_id)
+        job = await asyncio.to_thread(report_manager.get_job, job_id)
         if not job:
             raise HTTPException(status_code=404, detail="Generación no encontrada")
         public = dict(job)
@@ -208,14 +210,14 @@ def create_app(
     async def retry_report_job(job_id: str, smartpost_session: str | None = Cookie(default=None, alias=COOKIE_NAME)) -> dict[str, Any]:
         require_auth(smartpost_session)
         try:
-            return report_manager.retry(job_id)
+            return await asyncio.to_thread(report_manager.retry, job_id)
         except KeyError:
             raise HTTPException(status_code=404, detail="Generación no encontrada")
 
     @app.get("/api/report-jobs/{job_id}/artifacts/{artifact_id}")
     async def download_report_artifact(job_id: str, artifact_id: str, smartpost_session: str | None = Cookie(default=None, alias=COOKIE_NAME)):
         require_auth(smartpost_session)
-        meta, data = report_manager.get_artifact(job_id, artifact_id)
+        meta, data = await asyncio.to_thread(report_manager.get_artifact, job_id, artifact_id)
         if not meta or data is None:
             raise HTTPException(status_code=404, detail="Archivo no encontrado")
         filename = str(meta.get("filename") or "smartpost.xlsx").replace('"', "")
@@ -257,6 +259,10 @@ def create_app(
         require_auth(smartpost_session)
         if int(body.state_id) not in STATE_BY_ID:
             raise HTTPException(status_code=400, detail="Estado inválido")
+        try:
+            selected_date = operation_date(body.date).isoformat()
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=400, detail="Fecha inválida. Usá AAAA-MM-DD.")
         identifiers = extract_identifiers(body.text)
         if not identifiers:
             raise HTTPException(status_code=400, detail="Pegá al menos una guía, remito o guía agente.")
@@ -271,6 +277,7 @@ def create_app(
             "created_at": time.time(),
             "identifiers": identifiers,
             "state_id": int(body.state_id),
+            "selected_date": selected_date,
             "rows": rows,
         }
         # Purga previews viejas (30 min).
@@ -282,6 +289,7 @@ def create_app(
             "preview_id": preview_id,
             "state_id": int(body.state_id),
             "state_label": STATE_BY_ID[int(body.state_id)],
+            "selected_date": selected_date,
             "count": len(identifiers),
             "rows": rows,
         }
@@ -292,13 +300,13 @@ def create_app(
         preview_data = app.state.previews.pop(body.preview_id, None)
         if not preview_data or time.time() - float(preview_data.get("created_at") or 0) > 1800:
             raise HTTPException(status_code=409, detail="La vista previa venció. Volvé a revisar el lote.")
-        job = manager.create_job(preview_data["identifiers"], int(preview_data["state_id"]))
+        job = await asyncio.to_thread(manager.create_job, preview_data["identifiers"], int(preview_data["state_id"]), selected_date=preview_data["selected_date"])
         return job
 
     @app.get("/api/jobs/{job_id}")
     async def get_job(job_id: str, smartpost_session: str | None = Cookie(default=None, alias=COOKIE_NAME)) -> dict[str, Any]:
         require_auth(smartpost_session)
-        job = manager.get_job(job_id)
+        job = await asyncio.to_thread(manager.get_job, job_id)
         if not job:
             raise HTTPException(status_code=404, detail="Trabajo no encontrado")
         # No exponemos traceback completo al navegador; queda en logs del servidor.
@@ -311,7 +319,7 @@ def create_app(
     async def retry_job(job_id: str, smartpost_session: str | None = Cookie(default=None, alias=COOKIE_NAME)) -> dict[str, Any]:
         require_auth(smartpost_session)
         try:
-            return manager.retry_failed(job_id)
+            return await asyncio.to_thread(manager.retry_failed, job_id)
         except KeyError:
             raise HTTPException(status_code=404, detail="Trabajo no encontrado")
         except ValueError as exc:

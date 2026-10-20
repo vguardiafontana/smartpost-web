@@ -12,6 +12,8 @@ from app.core.config import epresis_settings, resolve_path
 from app.cambio_estado.service import _filter_guide, _resolve_one
 from app.cambio_estado.states import STATE_BY_ID
 from app.descarga.epresis_api import EpresisAPI
+from app.core.dates import business_now, operation_date
+from app.core.async_utils import ordered_map
 
 
 def _s(value: Any) -> str:
@@ -261,6 +263,13 @@ async def _combo_distributor_candidates(context, base: str, referer: str, query:
     q = _s(query)
     if not q:
         return []
+    from copy import deepcopy
+    cache = getattr(context, "_smartpost_distributor_cache", None)
+    if cache is None:
+        cache = context._smartpost_distributor_cache = {}
+    cache_key = (base, q)
+    if cache_key in cache:
+        return deepcopy(cache[cache_key])
     url = base.rstrip("/") + "/distribuidores/distribuidores/combo"
     response = await context.request.get(
         url,
@@ -283,7 +292,9 @@ async def _combo_distributor_candidates(context, base: str, referer: str, query:
             "dni": _dist_base_dni(code),
             "name": _s(r.get("full_name") or r.get("CodeFullName") or f"{_s(r.get('apellido'))}, {_s(r.get('nombre'))}"),
         })
-    return [x for x in out if x.get("id")]
+    result = [x for x in out if x.get("id")]
+    cache[cache_key] = deepcopy(result)
+    return result
 
 
 async def _combo_distributor(context, base: str, csrf: str, referer: str, query: str, timeout_ms: int, expected_name: str = "", expected_code: str = "") -> dict[str, str]:
@@ -458,13 +469,13 @@ async def _enable_rendition(context, base: str, csrf: str, referer: str, timeout
     raise RuntimeError(f"Epresis no pudo habilitar la rendición: {data}")
 
 
-async def change_state_v2(cfg: dict, identifiers: list[str], state_id: int, logger) -> list[dict[str, Any]]:
+async def change_state_v2(cfg: dict, identifiers: list[str], state_id: int, logger, selected_date=None) -> list[dict[str, Any]]:
     """Cambio de estado por Rendición de Chofer, agrupado por planilla.
 
     Seguridad operativa:
     - resuelve cada entrada a retiro_id y deduplica;
     - identifica el distribuidor exacto desde el show de la guía;
-    - busca recorridos del distribuidor para la fecha actual de la PC;
+    - busca recorridos del distribuidor para la fecha seleccionada;
     - valida que el retiro_id esté realmente dentro de la planilla antes de tocarlo;
     - agrupa y confirma en una sola request todos los retiros de la misma planilla;
     - un error en un pedido/planilla no impide continuar con los demás.
@@ -480,7 +491,9 @@ async def change_state_v2(cfg: dict, identifiers: list[str], state_id: int, logg
     timeout_ms = int(settings.get("request_timeout_ms", 30000))
     arrival_url = base + str(ce.get("arrival_path") or "/guias/arribo_paquetes")
     rendition_url = base + "/rendicion/rendicion_chofer"
-    date_text = datetime.now().strftime("%d/%m/%Y")
+    selected = operation_date(selected_date)
+    date_text = selected.strftime("%d/%m/%Y")
+    logger.info("[CAMBIO ESTADO V2] Fecha seleccionada: %s (America/Montevideo)", date_text)
 
     results: list[dict[str, Any]] = []
 
@@ -508,11 +521,19 @@ async def change_state_v2(cfg: dict, identifiers: list[str], state_id: int, logg
             # 1. Resolver y deduplicar entradas.
             seen: set[int] = set()
             resolved: list[dict[str, Any]] = []
+            async def resolve_input(entry):
+                idx, value = entry
+                logger.info("[CAMBIO ESTADO V2] Resolviendo %s/%s: %s", idx, len(identifiers), value)
+                return await _resolve_one(context, api, csrf, settings, arrival_url, _s(value), logger)
+            resolved_inputs = await ordered_map(
+                enumerate(identifiers, start=1), resolve_input
+            )
             for idx, raw in enumerate(identifiers, start=1):
                 value = _s(raw)
-                logger.info("[CAMBIO ESTADO V2] Resolviendo %s/%s: %s", idx, len(identifiers), value)
                 try:
-                    info = await _resolve_one(context, api, csrf, settings, arrival_url, value, logger)
+                    info = resolved_inputs[idx - 1]
+                    if isinstance(info, BaseException):
+                        raise info
                     item = info.to_dict()
                 except Exception as exc:
                     item = {"input_value": value, "resolution_status": "error", "message": str(exc)}
@@ -543,6 +564,7 @@ async def change_state_v2(cfg: dict, identifiers: list[str], state_id: int, logg
                             )
                         else:
                             resolved.append(item)
+                item["selected_date"] = selected.isoformat()
                 results.append(item)
 
             if not resolved:
@@ -749,8 +771,8 @@ async def change_state_v2(cfg: dict, identifiers: list[str], state_id: int, logg
             logger.info("[CAMBIO ESTADO V2] Rendición activa: %s", nro_rendicion)
 
             confirm_url = base + "/rendicion/confirmarRecepcionados"
-            now = datetime.now()
-            fecha = now.strftime("%d/%m/%Y")
+            now = business_now()
+            fecha = date_text
             hora = now.strftime("%H:%M")
 
             # 4b. Fallback sin distribuidor: usar una planilla real del día como sonda.
@@ -881,6 +903,7 @@ async def change_state_v2(cfg: dict, identifiers: list[str], state_id: int, logg
             "created_at": datetime.now().isoformat(timespec="seconds"),
             "mode": "cambio_estado_v2_rendicion_chofer",
             "state_id": int(state_id),
+            "selected_date": selected.isoformat(),
             "state": STATE_BY_ID[int(state_id)],
             "results": results,
         }

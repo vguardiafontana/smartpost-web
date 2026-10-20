@@ -30,10 +30,11 @@ document.querySelectorAll('[data-home]').forEach(b=>b.addEventListener('click',(
 
 $('previewBtn').addEventListener('click',async()=>{
   const text=$('bulkInput').value.trim();if(!text)return toast('Pegá al menos una guía o remito.');
+  const date=$('stateDate').value;if(!date)return toast('Elegí la fecha de la planilla y del cambio.');
   $('previewBtn').disabled=true;$('previewBtn').textContent='Buscando…';
   try{
-    const d=await api('/api/preview',{method:'POST',body:JSON.stringify({text,state_id:Number($('stateSelect').value)})});previewId=d.preview_id;
-    $('previewMeta').innerHTML=`<strong>${d.count}</strong> entrada(s) → <strong>${esc(d.state_label)}</strong>`;
+    const d=await api('/api/preview',{method:'POST',body:JSON.stringify({text,state_id:Number($('stateSelect').value),date})});previewId=d.preview_id;
+    $('previewMeta').innerHTML=`<strong>${d.count}</strong> entrada(s) → <strong>${esc(d.state_label)}</strong> · Fecha: <strong>${esc(d.selected_date.split('-').reverse().join('/'))}</strong>`;
     $('previewRows').innerHTML=d.rows.map(r=>{
       const resolved=r.resolution_status==='resolved';const same=!!r.already_assigned;
       const badge=same?'<span class="badge same">Estado ya asignado</span>':resolved?'<span class="badge ok">Lista</span>':'<span class="badge bad">No resuelta</span>';
@@ -54,7 +55,7 @@ function statusBadge(row){
 }
 function renderJob(job){
   const p=job.progress||{},total=Number(p.total||job.identifiers?.length||0),cur=Number(p.current||0),pct=total?Math.min(100,Math.round(cur/total*100)):0;
-  $('progressBar').style.width=`${job.status==='completed'?100:pct}%`;$('progressText').textContent=p.message||job.status;$('jobTitle').textContent=job.status==='completed'?'Terminado':job.status==='failed'||job.status==='interrupted'?'Interrumpido':'Procesando…';
+  $('progressBar').style.width=`${job.status==='completed'?100:pct}%`;$('progressText').textContent=(job.selected_date?job.selected_date.split('-').reverse().join('/')+' · ':'')+(p.message||job.status);$('jobTitle').textContent=job.status==='completed'?'Terminado':job.status==='failed'||job.status==='interrupted'?'Interrumpido':'Procesando…';
   if(['completed','failed','interrupted'].includes(job.status)){
     $('summaryCard').classList.remove('hidden');const s=job.summary||{};
     $('summaryGrid').innerHTML=[['Realizadas',s.success||0],['Estado ya asignado',s.already_assigned||0],['Errores',(s.errors||0)+(s.unresolved||0)],['Advertencias',s.warnings||0]].map(([l,n])=>`<div class="summary-item"><span class="summary-num">${n}</span><span class="summary-label">${l}</span></div>`).join('');
@@ -98,8 +99,9 @@ $('searchBtn').addEventListener('click',async()=>{
 });
 
 
-function localDateISO(){const d=new Date(),o=d.getTimezoneOffset();return new Date(d.getTime()-o*60000).toISOString().slice(0,10)}
+function localDateISO(){const p=new Intl.DateTimeFormat('en-US',{timeZone:'America/Montevideo',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()),v=t=>p.find(x=>x.type===t).value;return `${v('year')}-${v('month')}-${v('day')}`}
 if($('reportsDate')&&!$('reportsDate').value)$('reportsDate').value=localDateISO();
+if($('stateDate')&&!$('stateDate').value)$('stateDate').value=localDateISO();
 
 $('generateReportsBtn').addEventListener('click',async()=>{
   const date=$('reportsDate').value;if(!date)return toast('Elegí una fecha.');

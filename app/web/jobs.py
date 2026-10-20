@@ -9,6 +9,7 @@ import re
 import threading
 import traceback
 import uuid
+import time
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
@@ -17,6 +18,7 @@ from typing import Any, Callable
 from app.cambio_estado.states import STATE_BY_ID
 from app.core.config import load_config, resolve_path
 from app.core.logging import setup_logging
+from app.core.dates import operation_date
 
 
 def _now() -> str:
@@ -56,10 +58,16 @@ class JobProgressHandler(logging.Handler):
     def __init__(self, callback: Callable[[str, int | None, int | None], None]):
         super().__init__(logging.INFO)
         self.callback = callback
+        self._last_update = float("-inf")
 
     def emit(self, record: logging.LogRecord) -> None:
         try:
             message = record.getMessage()
+            # A log line must not add two network round trips to Neon.
+            now = time.monotonic()
+            if now - self._last_update < 0.5:
+                return
+            self._last_update = now
             current = total = None
             m = self._resolve_re.search(message)
             if m:
@@ -182,6 +190,7 @@ class JobManager:
     def __init__(self, operation_lock: threading.Lock | None = None):
         self._queue: queue.Queue[str | None] = queue.Queue()
         self._lock = threading.RLock()
+        self._cache = {}
         self.operation_lock = operation_lock or threading.Lock()
         self._thread: threading.Thread | None = None
         self._stopping = threading.Event()
@@ -211,7 +220,7 @@ class JobManager:
         if thread and thread.is_alive():
             thread.join(timeout=3)
 
-    def create_job(self, identifiers: list[str], state_id: int, *, retry_of: str | None = None) -> dict[str, Any]:
+    def create_job(self, identifiers: list[str], state_id: int, *, retry_of: str | None = None, selected_date=None) -> dict[str, Any]:
         state_id = int(state_id)
         if state_id not in STATE_BY_ID:
             raise ValueError(f"Estado no permitido: {state_id}")
@@ -227,6 +236,7 @@ class JobManager:
             "finished_at": None,
             "identifiers": cleaned,
             "state_id": state_id,
+            "selected_date": operation_date(selected_date).isoformat(),
             "state_label": STATE_BY_ID[state_id],
             "retry_of": retry_of,
             "progress": {"current": 0, "total": len(cleaned), "message": "En cola…"},
@@ -240,8 +250,14 @@ class JobManager:
 
     def get_job(self, job_id: str) -> dict[str, Any] | None:
         with self._lock:
+            cached = self._cache.get(job_id)
+            if cached and time.monotonic() - cached[0] < 2:
+                return deepcopy(cached[1])
             try:
-                return self._store.get(job_id)
+                job = self._store.get(job_id)
+                if job:
+                    self._remember(job)
+                return job
             except Exception:
                 return None
 
@@ -255,7 +271,7 @@ class JobManager:
             ids = [str(x) for x in job.get("identifiers") or []]
         if not ids:
             raise ValueError("Este trabajo no tiene errores para reintentar.")
-        return self.create_job(ids, int(job["state_id"]), retry_of=job_id)
+        return self.create_job(ids, int(job["state_id"]), retry_of=job_id, selected_date=job.get("selected_date"))
 
     def update_progress(self, job_id: str, message: str, current: int | None = None, total: int | None = None) -> None:
         job = self.get_job(job_id)
@@ -303,6 +319,7 @@ class JobManager:
                         list(job["identifiers"]),
                         int(job["state_id"]),
                         logger.getChild("WEB_CAMBIO_ESTADO_V2"),
+                        selected_date=job.get("selected_date"),
                     )
                 )
             job = self.get_job(job_id) or job
@@ -342,3 +359,10 @@ class JobManager:
     def _save(self, job: dict[str, Any]) -> None:
         with self._lock:
             self._store.save(job)
+            self._remember(job)
+
+    def _remember(self, job):
+        self._cache.pop(job["id"], None)
+        self._cache[job["id"]] = (time.monotonic(), deepcopy(job))
+        if len(self._cache) > 128:
+            self._cache.pop(next(iter(self._cache)))

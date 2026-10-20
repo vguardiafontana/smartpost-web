@@ -1,4 +1,4 @@
-> Versión actual: v2.9.1
+> Versión web actual: v2.9.5
 
 ## v2.6.2
 

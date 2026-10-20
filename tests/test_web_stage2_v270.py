@@ -45,12 +45,13 @@ class FakeManager:
     def start(self): self.started = True
     def stop(self): self.started = False
 
-    def create_job(self, identifiers, state_id, retry_of=None):
+    def create_job(self, identifiers, state_id, retry_of=None, selected_date=None):
         job = {
             "id": "job1", "status": "queued", "identifiers": list(identifiers),
             "state_id": int(state_id), "state_label": "RC - EN RUTA PARA SU ENTREGA",
             "progress": {"current": 0, "total": len(identifiers), "message": "En cola…"},
             "results": [], "summary": None, "error": "", "retry_of": retry_of,
+            "selected_date": selected_date,
         }
         self.jobs[job["id"]] = job
         return job

@@ -7,6 +7,7 @@ import re
 import threading
 import traceback
 import uuid
+import time
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
@@ -83,6 +84,7 @@ class _PostgresReportStore:
 class ReportJobManager:
     def __init__(self, operation_lock: threading.Lock):
         self.operation_lock=operation_lock; self._queue=queue.Queue(); self._stop=threading.Event(); self._thread=None; self._lock=threading.RLock()
+        self._cache = {}
         db=(os.environ.get('DATABASE_URL') or '').strip()
         if db:self._store=_PostgresReportStore(db); self.storage_backend='postgres'
         else:
@@ -104,8 +106,15 @@ class ReportJobManager:
         if not job:raise KeyError(job_id)
         return self.create_job(job['date'])
     def get_job(self,job_id):
-        try:return self._store.get(job_id)
-        except Exception:return None
+        with self._lock:
+            cached = self._cache.get(job_id)
+            if cached and time.monotonic() - cached[0] < 2:
+                return deepcopy(cached[1])
+            try:
+                job = self._store.get(job_id)
+                if job:self._remember(job)
+                return job
+            except Exception:return None
     def get_artifact(self,job_id,artifact_id):
         job=self.get_job(job_id)
         if not job:return None,None
@@ -113,7 +122,13 @@ class ReportJobManager:
         if not meta:return None,None
         return meta,self._store.get_artifact(job_id,artifact_id)
     def _save(self,job):
-        with self._lock:self._store.save(job)
+        with self._lock:
+            self._store.save(job)
+            self._remember(job)
+    def _remember(self,job):
+        self._cache.pop(job['id'],None)
+        self._cache[job['id']] = (time.monotonic(),deepcopy(job))
+        if len(self._cache)>128:self._cache.pop(next(iter(self._cache)))
     def _progress(self,jid,msg,cur,total=4):
         job=self.get_job(jid)
         if not job:return

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import html
 import re
+import sys
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -11,6 +12,7 @@ from playwright.async_api import async_playwright
 
 from app.core.config import epresis_settings, resolve_path
 from app.descarga.epresis_api import EpresisAPI
+from app.core.async_utils import ordered_map
 from app.cambio_estado.service import (
     extract_identifiers,
     _filter_guide,
@@ -153,6 +155,10 @@ async def _download_distributor_excel_index(page, context, settings: dict, logge
     ``#expor-excel`` de la grilla, por lo que primero reproducimos ese click real con
     Playwright. Como respaldo probamos POST autenticado al mismo endpoint.
     """
+    # This XLS reader uses Excel COM. Render/Linux uses the existing ficha/API
+    # fallback directly instead of downloading a file it cannot read.
+    if sys.platform != "win32":
+        return {}
     base = settings["base_url"].rstrip("/")
     list_url = base + "/distribuidores/lista-distribuidores"
     path = str(settings.get("distributor_excel_path") or "/distribuidores/excelDistribuidores")
@@ -179,7 +185,7 @@ async def _download_distributor_excel_index(page, context, settings: dict, logge
                 async with page.expect_download(timeout=int(settings.get("request_timeout_ms", 30000))) as info:
                     await button.first.click(timeout=5000)
                 download = await info.value
-                body = await Path(await download.path()).read_bytes()
+                body = Path(await download.path()).read_bytes()
                 index = await read_body(body)
                 if index:
                     logger.info("[BUSQUEDA] Excel distribuidores descargado desde el botón EXPORTAR COMPLETO A EXCEL.")
@@ -989,9 +995,13 @@ async def search_shipments(cfg: dict, identifiers: list[str], logger) -> list[di
             csrf = await extract_csrf_token(page)
             api = EpresisAPI(context.request, settings, csrf, logger, referer=arrival_url)
 
-            # Fuente preferida para teléfono/celular: exportación completa de Distribuidores.
-            # Se descarga UNA vez y luego se consulta localmente por DNI.
-            distributor_excel_index = await _download_distributor_excel_index(page, context, settings, logger)
+            # El padrón completo sólo se descarga si falta el teléfono en la ficha.
+            # Las fichas ya leídas se reutilizan durante esta búsqueda.
+            distributor_excel_index = None
+            direct_distributor_cache = {}
+            resolved_inputs = await ordered_map(
+                identifiers, lambda value: _resolve_one(context, api, csrf, settings, arrival_url, str(value).strip(), logger)
+            )
 
             for idx, value in enumerate(identifiers, start=1):
                 value = str(value).strip()
@@ -999,7 +1009,9 @@ async def search_shipments(cfg: dict, identifiers: list[str], logger) -> list[di
                     continue
                 logger.info("[BUSQUEDA] Resolviendo %s/%s: %s", idx, len(identifiers), value)
                 try:
-                    resolved = await _resolve_one(context, api, csrf, settings, arrival_url, value, logger)
+                    resolved = resolved_inputs[idx - 1]
+                    if isinstance(resolved, BaseException):
+                        raise resolved
                     if not resolved.retiro_id:
                         out.append({"entrada": value, "error": resolved.message or "No encontrado"})
                         continue
@@ -1041,13 +1053,17 @@ async def search_shipments(cfg: dict, identifiers: list[str], logger) -> list[di
                     dist_url = details.get("distribuidor_url", "")
                     if dist_url:
                         try:
-                            direct_dist = await _scrape_distributor_show(
-                                page, dist_url, int(settings.get("request_timeout_ms", 30000))
-                            )
+                            if dist_url not in direct_distributor_cache:
+                                direct_distributor_cache[dist_url] = await _scrape_distributor_show(
+                                    page, dist_url, int(settings.get("request_timeout_ms", 30000))
+                                )
+                            direct_dist = direct_distributor_cache[dist_url]
                         except Exception as exc:
                             logger.warning("[BUSQUEDA] No pude leer ficha distribuidor %s: %s", dist_url, exc)
 
-                    excel_dist = distributor_excel_index.get(dni_key, {}) if dni_key else {}
+                    if not direct_dist.get("phone") and dni_key and distributor_excel_index is None:
+                        distributor_excel_index = await _download_distributor_excel_index(page, context, settings, logger)
+                    excel_dist = (distributor_excel_index or {}).get(dni_key, {}) if dni_key else {}
                     if direct_dist.get("phone"):
                         dist = {
                             "dni": direct_dist.get("dni") or parsed_dni,
