@@ -52,6 +52,10 @@ class ConfirmBody(BaseModel):
     preview_id: str
 
 
+class StartJobBody(PreviewBody):
+    request_id: uuid.UUID
+
+
 class SearchGuidesBody(BaseModel):
     text: str = Field(default="", max_length=20000)
 
@@ -293,6 +297,30 @@ def create_app(
             "count": len(identifiers),
             "rows": rows,
         }
+
+    @app.post("/api/jobs/start")
+    async def start_job(body: StartJobBody, smartpost_session: str | None = Cookie(default=None, alias=COOKIE_NAME)) -> dict[str, Any]:
+        require_auth(smartpost_session)
+        if body.state_id not in STATE_BY_ID:
+            raise HTTPException(status_code=400, detail="Estado inválido")
+        try:
+            selected_date = operation_date(body.date).isoformat()
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=400, detail="Fecha inválida. Usá AAAA-MM-DD.")
+        identifiers = extract_identifiers(body.text)
+        if not identifiers:
+            raise HTTPException(status_code=400, detail="Pegá al menos una guía, remito o guía agente.")
+        if len(identifiers) > 250:
+            raise HTTPException(status_code=400, detail="Máximo 250 identificadores por lote.")
+        # Persist and enqueue immediately. All Epresis reads and writes happen
+        # in the existing server worker, independently of the phone's connection.
+        try:
+            return await asyncio.to_thread(
+                manager.create_job, identifiers, body.state_id,
+                selected_date=selected_date, request_id=body.request_id.hex,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc))
 
     @app.post("/api/jobs")
     async def create_job(body: ConfirmBody, smartpost_session: str | None = Cookie(default=None, alias=COOKIE_NAME)) -> dict[str, Any]:

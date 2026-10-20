@@ -72,19 +72,8 @@
           <select id="stateSelect"></select>
           <label for="stateDate">Fecha de planilla y cambio</label>
           <input id="stateDate" type="date" required>
-          <button id="previewBtn" class="primary full">Ver vista previa</button>
-        </section>
-      </div>
-
-      <div id="previewStep" class="stack hidden">
-        <section class="card">
-          <div class="section-head"><div><div class="eyebrow">VISTA PREVIA</div><h2 id="previewTitle">Revisá antes de confirmar</h2></div></div>
-          <div id="previewMeta" class="meta"></div>
-          <div id="previewRows" class="rows"></div>
-          <div class="sticky-actions">
-            <button id="backBtn" class="secondary">Volver</button>
-            <button id="confirmBtn" class="danger">Confirmar cambio</button>
-          </div>
+          <button id="startBtn" class="primary full">Iniciar cambio de estado</button>
+          <p class="muted small">Un toque inicia el lote con el estado y la fecha elegidos. El trabajo sigue en el servidor.</p>
         </section>
       </div>
 
@@ -94,7 +83,8 @@
           <h2 id="jobTitle">Procesando…</h2>
           <div class="progress-track"><div id="progressBar" class="progress-bar"></div></div>
           <div id="progressText" class="muted small">Preparando…</div>
-          <p class="muted small">Podés bloquear el iPhone o cerrar Safari. El servidor sigue trabajando.</p>
+          <p id="jobReceipt" class="muted small" role="status" aria-live="polite"></p>
+          <button id="retrySendBtn" class="secondary full hidden">Reintentar envío</button>
         </section>
         <section id="summaryCard" class="card hidden">
           <div class="eyebrow">RESUMEN</div>

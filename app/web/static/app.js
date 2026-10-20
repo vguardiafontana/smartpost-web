@@ -1,5 +1,5 @@
 const $=id=>document.getElementById(id);
-let previewId=null,currentJobId=localStorage.getItem('smartpost_last_job')||null,pollTimer=null,currentReportJobId=localStorage.getItem('smartpost_last_report_job')||null,reportPollTimer=null,lastSearchRows=[],searchPhotoSortMode=0;
+let currentJobId=localStorage.getItem('smartpost_last_job')||null,pollTimer=null,currentReportJobId=localStorage.getItem('smartpost_last_report_job')||null,reportPollTimer=null,lastSearchRows=[],searchPhotoSortMode=0,sendingBatch=false;
 
 async function api(path,options={}){
   const res=await fetch(path,{credentials:'same-origin',headers:{'Content-Type':'application/json',...(options.headers||{})},...options});
@@ -11,40 +11,53 @@ async function api(path,options={}){
 function toast(msg){$('toast').textContent=msg;$('toast').classList.remove('hidden');setTimeout(()=>$('toast').classList.add('hidden'),2600)}
 function showLogin(){$('loginView').classList.remove('hidden');$('appView').classList.add('hidden');$('logoutBtn').classList.add('hidden');$('pageTitle').textContent='SmartPost'}
 function showApp(){$('loginView').classList.add('hidden');$('appView').classList.remove('hidden');$('logoutBtn').classList.remove('hidden')}
-function step(name){['homeStep','composeStep','previewStep','jobStep','searchStep','reportsStep','visitPhotosStep'].forEach(id=>$(id).classList.toggle('hidden',id!==name));$('pageTitle').textContent=name==='composeStep'||name==='previewStep'||name==='jobStep'?'Cambio de estado v2':name==='searchStep'?'Búsqueda de guías':name==='reportsStep'?'Reportes y Visitas':name==='visitPhotosStep'?'Visitas sin foto':'SmartPost'}
+function step(name){['homeStep','composeStep','jobStep','searchStep','reportsStep','visitPhotosStep'].forEach(id=>$(id).classList.toggle('hidden',id!==name));$('pageTitle').textContent=name==='composeStep'||name==='jobStep'?'Cambio de estado v2':name==='searchStep'?'Búsqueda de guías':name==='reportsStep'?'Reportes y Visitas':name==='visitPhotosStep'?'Visitas sin foto':'SmartPost'}
 function esc(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
 function safeUrl(v){const s=String(v||'');return /^https:\/\//i.test(s)?s:''}
 
 async function init(){
   if('serviceWorker' in navigator){navigator.serviceWorker.register('/static/sw.js').catch(()=>{})}
-  try{await api('/api/session');showApp();await loadStates();if(currentJobId){step('jobStep');pollJob(currentJobId)}else step('homeStep')}catch{showLogin()}
+  try{await api('/api/session');showApp();await loadStates();await resumeBatch()}catch{showLogin()}
 }
 async function loadStates(){const d=await api('/api/states');$('stateSelect').innerHTML=d.states.map(s=>`<option value="${s.id}">${esc(s.label)}</option>`).join('')}
 
-$('loginForm').addEventListener('submit',async e=>{e.preventDefault();$('loginError').textContent='';try{await api('/api/auth/login',{method:'POST',body:JSON.stringify({pin:$('pinInput').value})});$('pinInput').value='';showApp();await loadStates();step('homeStep')}catch(err){$('loginError').textContent=err.message}})
-$('logoutBtn').addEventListener('click',async()=>{try{await api('/api/auth/logout',{method:'POST'})}catch{}localStorage.removeItem('smartpost_last_job');currentJobId=null;showLogin()})
+$('loginForm').addEventListener('submit',async e=>{e.preventDefault();$('loginError').textContent='';try{await api('/api/auth/login',{method:'POST',body:JSON.stringify({pin:$('pinInput').value})});$('pinInput').value='';showApp();await loadStates();await resumeBatch()}catch(err){$('loginError').textContent=err.message}})
+$('logoutBtn').addEventListener('click',async()=>{try{await api('/api/auth/logout',{method:'POST'})}catch{}clearTimeout(pollTimer);localStorage.removeItem('smartpost_last_job');localStorage.removeItem('smartpost_pending_batch');currentJobId=null;showLogin()})
 $('openV2Btn').addEventListener('click',()=>step('composeStep'));
 $('openSearchBtn').addEventListener('click',()=>step('searchStep'));
 $('openReportsBtn').addEventListener('click',()=>{step('reportsStep');if(currentReportJobId)pollReportJob(currentReportJobId)});
 document.querySelectorAll('[data-home]').forEach(b=>b.addEventListener('click',()=>{clearTimeout(pollTimer);clearTimeout(reportPollTimer);step('homeStep')}));
 
-$('previewBtn').addEventListener('click',async()=>{
+function pendingBatch(){try{return JSON.parse(localStorage.getItem('smartpost_pending_batch')||'null')}catch{localStorage.removeItem('smartpost_pending_batch');return null}}
+async function resumeBatch(){const pending=pendingBatch();if(pending){await submitBatch(pending)}else if(currentJobId){step('jobStep');pollJob(currentJobId)}else step('homeStep')}
+async function submitBatch(batch){
+  if(sendingBatch)return;
+  sendingBatch=true;clearTimeout(pollTimer);$('startBtn').disabled=true;
+  currentJobId=batch.request_id;localStorage.setItem('smartpost_last_job',currentJobId);
+  step('jobStep');$('summaryCard').classList.add('hidden');$('retrySendBtn').classList.add('hidden');
+  $('jobTitle').textContent='Enviando lote…';$('progressBar').style.width='0%';
+  $('progressText').textContent='Guardando el lote en el servidor…';$('jobReceipt').textContent='Enviando los números, el estado y la fecha elegidos.';
+  try{
+    const job=await api('/api/jobs/start',{method:'POST',body:JSON.stringify(batch),keepalive:true});
+    localStorage.removeItem('smartpost_pending_batch');currentJobId=job.id;localStorage.setItem('smartpost_last_job',job.id);
+    renderJob(job);pollJob(job.id);
+  }catch(err){
+    if([400,409,422].includes(err.status)){
+      localStorage.removeItem('smartpost_pending_batch');localStorage.removeItem('smartpost_last_job');currentJobId=null;step('composeStep');toast(err.message);
+    }else if(err.status!==401){
+      $('jobTitle').textContent='Envío pendiente';$('progressText').textContent='No pudimos confirmar la recepción del lote.';
+      $('jobReceipt').textContent='Al volver a abrir SmartPost se reintentará el mismo envío, sin duplicar el lote.';$('retrySendBtn').classList.remove('hidden');
+    }
+  }finally{sendingBatch=false;$('startBtn').disabled=false}
+}
+$('retrySendBtn').addEventListener('click',()=>{const batch=pendingBatch();if(batch)submitBatch(batch)});
+$('startBtn').addEventListener('click',async()=>{
+  if(sendingBatch)return;
   const text=$('bulkInput').value.trim();if(!text)return toast('Pegá al menos una guía o remito.');
   const date=$('stateDate').value;if(!date)return toast('Elegí la fecha de la planilla y del cambio.');
-  $('previewBtn').disabled=true;$('previewBtn').textContent='Buscando…';
-  try{
-    const d=await api('/api/preview',{method:'POST',body:JSON.stringify({text,state_id:Number($('stateSelect').value),date})});previewId=d.preview_id;
-    $('previewMeta').innerHTML=`<strong>${d.count}</strong> entrada(s) → <strong>${esc(d.state_label)}</strong> · Fecha: <strong>${esc(d.selected_date.split('-').reverse().join('/'))}</strong>`;
-    $('previewRows').innerHTML=d.rows.map(r=>{
-      const resolved=r.resolution_status==='resolved';const same=!!r.already_assigned;
-      const badge=same?'<span class="badge same">Estado ya asignado</span>':resolved?'<span class="badge ok">Lista</span>':'<span class="badge bad">No resuelta</span>';
-      const detail=resolved?`Guía ${esc(r.retiro_id||r.guia||'')} · ${esc(r.detected_type||'')} · Estado actual: ${esc(r.current_state||'—')}`:esc(r.message||'No encontrada');
-      return `<div class="row"><div class="row-top"><strong>${esc(r.input_value||'')}</strong>${badge}</div><div class="row-detail">${detail}</div></div>`
-    }).join('');step('previewStep')
-  }catch(err){toast(err.message)}finally{$('previewBtn').disabled=false;$('previewBtn').textContent='Ver vista previa'}
-})
-$('backBtn').addEventListener('click',()=>step('composeStep'))
-$('confirmBtn').addEventListener('click',async()=>{if(!previewId)return; $('confirmBtn').disabled=true;try{const job=await api('/api/jobs',{method:'POST',body:JSON.stringify({preview_id:previewId})});previewId=null;currentJobId=job.id;localStorage.setItem('smartpost_last_job',job.id);step('jobStep');$('summaryCard').classList.add('hidden');pollJob(job.id)}catch(err){toast(err.message)}finally{$('confirmBtn').disabled=false}})
+  const batch={text,state_id:Number($('stateSelect').value),date,request_id:Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,'0')).join('')};
+  localStorage.setItem('smartpost_pending_batch',JSON.stringify(batch));await submitBatch(batch);
+});
 
 function statusBadge(row){
   if(row.resolution_status==='resolved'&&row.change_status==='ok')return ['Realizada','ok'];
@@ -54,6 +67,7 @@ function statusBadge(row){
   return ['Error','bad'];
 }
 function renderJob(job){
+  $('jobReceipt').textContent='Lote recibido en el servidor. Podés bloquear el celular o cerrar esta página.';$('retrySendBtn').classList.add('hidden');
   const p=job.progress||{},total=Number(p.total||job.identifiers?.length||0),cur=Number(p.current||0),pct=total?Math.min(100,Math.round(cur/total*100)):0;
   $('progressBar').style.width=`${job.status==='completed'?100:pct}%`;$('progressText').textContent=(job.selected_date?job.selected_date.split('-').reverse().join('/')+' · ':'')+(p.message||job.status);$('jobTitle').textContent=job.status==='completed'?'Terminado':job.status==='failed'||job.status==='interrupted'?'Interrumpido':'Procesando…';
   if(['completed','failed','interrupted'].includes(job.status)){
@@ -65,7 +79,7 @@ function renderJob(job){
 }
 async function pollJob(id){clearTimeout(pollTimer);try{const job=await api(`/api/jobs/${id}`);renderJob(job);if(['queued','running'].includes(job.status)){pollTimer=setTimeout(()=>pollJob(id),1000)}}catch(err){toast(err.message);pollTimer=setTimeout(()=>pollJob(id),3000)}}
 $('retryBtn').addEventListener('click',async()=>{if(!currentJobId)return;try{const job=await api(`/api/jobs/${currentJobId}/retry`,{method:'POST'});currentJobId=job.id;localStorage.setItem('smartpost_last_job',job.id);$('summaryCard').classList.add('hidden');pollJob(job.id)}catch(err){toast(err.message)}})
-$('newBatchBtn').addEventListener('click',()=>{localStorage.removeItem('smartpost_last_job');currentJobId=null;previewId=null;$('bulkInput').value='';step('composeStep')})
+$('newBatchBtn').addEventListener('click',()=>{localStorage.removeItem('smartpost_last_job');localStorage.removeItem('smartpost_pending_batch');currentJobId=null;$('bulkInput').value='';step('composeStep')})
 
 function searchRow(r){
   if(r.error){return `<div class="row"><div class="row-top"><strong>${esc(r.entrada||'')}</strong><span class="badge bad">Error</span></div><div class="row-detail">${esc(r.error)}</div></div>`}

@@ -220,14 +220,14 @@ class JobManager:
         if thread and thread.is_alive():
             thread.join(timeout=3)
 
-    def create_job(self, identifiers: list[str], state_id: int, *, retry_of: str | None = None, selected_date=None) -> dict[str, Any]:
+    def create_job(self, identifiers: list[str], state_id: int, *, retry_of: str | None = None, selected_date=None, request_id=None) -> dict[str, Any]:
         state_id = int(state_id)
         if state_id not in STATE_BY_ID:
             raise ValueError(f"Estado no permitido: {state_id}")
         cleaned = [str(x).strip() for x in identifiers if str(x).strip()]
         if not cleaned:
             raise ValueError("No hay identificadores para procesar.")
-        job_id = uuid.uuid4().hex
+        job_id = uuid.UUID(str(request_id)).hex if request_id is not None else uuid.uuid4().hex
         job = {
             "id": job_id,
             "status": "queued",
@@ -244,9 +244,18 @@ class JobManager:
             "results": [],
             "error": "",
         }
-        self._save(job)
-        self._queue.put(job_id)
-        return deepcopy(job)
+        with self._lock:
+            if request_id is not None:
+                # Read the durable store directly: an unavailable database must
+                # not be mistaken for a new request after a lost acknowledgement.
+                existing = self._store.get(job_id)
+                if existing:
+                    if any(existing.get(key) != job[key] for key in ("identifiers", "state_id", "selected_date")):
+                        raise ValueError("Esta solicitud ya corresponde a otro lote. Iniciá un lote nuevo.")
+                    return deepcopy(existing)
+            self._save(job)
+            self._queue.put(job_id)
+            return deepcopy(job)
 
     def get_job(self, job_id: str) -> dict[str, Any] | None:
         with self._lock:

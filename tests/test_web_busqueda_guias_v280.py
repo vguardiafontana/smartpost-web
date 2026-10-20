@@ -67,7 +67,7 @@ def test_mobile_shell_exposes_home_and_search_module_without_removing_v2():
     assert "Búsqueda de guías" in html
     assert 'id="searchInput"' in html
     assert "/api/search-guides" in js
-    assert "/api/preview" in js
+    assert "/api/jobs/start" in js
     assert "/api/jobs" in js
 
 
