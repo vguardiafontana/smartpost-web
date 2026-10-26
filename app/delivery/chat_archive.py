@@ -10,7 +10,7 @@ from app.core.config import resolve_path
 from app.delivery.whatsapp import wait_until_logged_in
 
 
-_ARCHIVED_RE = re.compile(r"^(Archivados|Archived)$", re.I)
+_ARCHIVED_RE = re.compile(r"^(Archivados|Archived)(?:\s*\(?\d+\)?)?$", re.I)
 _ARCHIVE_RE = re.compile(r"^(Archivar chat|Archivar|Archive chat|Archive)$", re.I)
 _UNARCHIVE_RE = re.compile(r"^(Desarchivar chat|Desarchivar|Unarchive chat|Unarchive)$", re.I)
 _ARCHIVE_CONTAINS_RE = re.compile(r"\b(archivar|archive)(?:\s+chat)?\b", re.I)
@@ -285,9 +285,14 @@ async def _find_archived_entry(page: Page):
 async def _chat_rows(page: Page) -> list[Locator]:
     """Return visible WhatsApp chat rows, trying several current/legacy DOM shapes."""
     selectors = [
+        "[data-testid='archived-chats'] [role='row']",
+        "[data-testid='archived-chats'] [role='listitem']",
         "#pane-side [data-testid='cell-frame-container']",
         "#pane-side [role='listitem']",
         "#pane-side [role='row']",
+        "#side [role='grid'] [role='row']",
+        "#side [role='listitem']",
+        "#app [role='grid'][aria-label*='archiv' i] [role='row']",
     ]
     seen = set()
     rows: list[Locator] = []
@@ -331,7 +336,7 @@ async def _menu_is_visible(page: Page) -> bool:
         "[role='menu']",
         "[data-testid='mi-archive']",
         "[data-testid='mi-unarchive']",
-        "[data-testid*='menu']",
+        "[role='menuitem']",
     ):
         item = await _first_visible(page.locator(selector))
         if item is not None:
@@ -446,15 +451,18 @@ async def _click_row_quick_action(row: Locator, *, unarchive: bool) -> bool:
     ]
     # Some builds use data-icon attributes instead of accessible labels.
     if unarchive:
-        selectors += ["[data-icon*='unarchive' i]"]
+        selectors += ["[data-icon*='unarchive' i]", "button:has(svg title:text-is('ic-unarchive'))", "[role='button']:has(svg title:text-is('ic-unarchive'))"]
     else:
-        selectors += ["[data-icon='archive']", "[data-icon*='archive' i]"]
+        selectors += ["[data-icon='archive']", "button:has(svg title:text-is('ic-archive'))", "[role='button']:has(svg title:text-is('ic-archive'))"]
     for selector in selectors:
         item = await _first_visible(row.locator(selector))
         if item is None:
             continue
         try:
-            await item.click(force=True, timeout=1800)
+            if not unarchive and await item.evaluate("el => /desarchivar|unarchive/i.test([el.getAttribute('aria-label'),el.getAttribute('title'),el.getAttribute('data-icon')].join(' '))"):
+                continue
+            target = item.locator("xpath=ancestor-or-self::*[self::button or @role='button' or @tabindex][1]")
+            await (target if await target.count() else item).click(timeout=1800)
             return True
         except Exception:
             continue
@@ -478,9 +486,9 @@ async def _click_page_quick_action_near_row(page: Page, row: Locator, *, unarchi
         f"[title*='{en_word}' i]",
     ]
     if unarchive:
-        selectors += ["[data-icon*='unarchive' i]"]
+        selectors += ["[data-icon*='unarchive' i]", "button:has(svg title:text-is('ic-unarchive'))", "[role='button']:has(svg title:text-is('ic-unarchive'))"]
     else:
-        selectors += ["[data-icon='archive']", "[data-icon*='archive' i]"]
+        selectors += ["[data-icon='archive']", "button:has(svg title:text-is('ic-archive'))", "[role='button']:has(svg title:text-is('ic-archive'))"]
 
     try:
         rbox = await row.bounding_box()
@@ -505,11 +513,19 @@ async def _click_page_quick_action_near_row(page: Page, row: Locator, *, unarchi
                 box = await item.bounding_box()
                 if not box:
                     continue
+                if box['x'] < rbox['x'] - 10 or box['x'] > rbox['x'] + rbox['width'] + 20:
+                    continue
+                if await item.evaluate("el => !!el.closest('#main')"):
+                    continue
+                if not unarchive and await item.evaluate("el => /desarchivar|unarchive/i.test([el.getAttribute('aria-label'),el.getAttribute('title'),el.getAttribute('data-icon')].join(' '))"):
+                    continue
                 cy = box["y"] + box["height"] / 2
                 candidates.append((abs(cy - ry), item))
             except Exception:
                 continue
-    for _, item in sorted(candidates, key=lambda x: x[0]):
+    for distance, item in sorted(candidates, key=lambda x: x[0]):
+        if distance > max(20, rbox["height"] / 2):
+            continue
         try:
             await item.click(force=True, timeout=1800)
             return True
@@ -538,7 +554,7 @@ async def _unarchive_via_open_chat_header(page: Page, row: Locator) -> bool:
 
     # Open the menu from the active conversation header.  Keep selectors broad
     # because WhatsApp rotates data-testid/data-icon names between builds.
-    header_roots = [page.locator("#main header"), page.locator("header")]
+    header_roots = [page.locator("#main header")]
     menu_selectors = [
         "[data-testid='conversation-menu-button']",
         "[data-testid*='menu' i]",
@@ -704,6 +720,28 @@ async def _apply_row_action(page: Page, row: Locator, *, unarchive: bool) -> Non
     raise RuntimeError(f"No encontré la acción '{action}' en el menú contextual de WhatsApp.{suffix}")
 
 
+async def _row_identity(row):
+    return await row.evaluate("""el => {
+        const identified = el.closest('[data-id]') || el.querySelector('[data-id]');
+        if (identified) return 'id:' + identified.getAttribute('data-id');
+        const title = el.querySelector('span[title]');
+        return title ? 'title:' + title.getAttribute('title') : 'text:' + el.innerText.trim();
+    }""")
+
+
+async def _wait_row_removed(page, identity, timeout_ms=4500):
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + timeout_ms / 1000
+    while loop.time() < deadline:
+        identities = [await _row_identity(row) for row in await _chat_rows(page)]
+        if identity not in identities:
+            # Let the filtered list settle; a transient render is not success.
+            await page.wait_for_timeout(150)
+            return identity not in [await _row_identity(row) for row in await _chat_rows(page)]
+        await page.wait_for_timeout(100)
+    return False
+
+
 async def _process_all_rows(page: Page, *, unarchive: bool, logger, max_chats: int = 250) -> int:
     done = 0
     stale_attempts = 0
@@ -712,12 +750,15 @@ async def _process_all_rows(page: Page, *, unarchive: bool, logger, max_chats: i
         if not rows:
             break
         row = rows[0]
+        identity = await _row_identity(row)
         try:
             label = re.sub(r"\s+", " ", (await row.inner_text()).strip()).split("\n", 1)[0][:80]
         except Exception:
             label = f"chat {done + 1}"
         try:
             await _apply_row_action(page, row, unarchive=unarchive)
+            if not await _wait_row_removed(page, identity):
+                raise RuntimeError(f"WhatsApp no confirmó el cambio de '{label}': el chat sigue en la lista. No se contabilizó como realizado.")
         except Exception:
             stale_attempts += 1
             if stale_attempts >= 2:
@@ -727,7 +768,7 @@ async def _process_all_rows(page: Page, *, unarchive: bool, logger, max_chats: i
         stale_attempts = 0
         done += 1
         logger.info("[WHATSAPP CHATS] %s: %s", "Desarchivado" if unarchive else "Archivado", label)
-        await page.wait_for_timeout(350)
+        await page.wait_for_timeout(100)
     if done >= max_chats:
         raise RuntimeError(f"Se alcanzó el límite de seguridad de {max_chats} chats.")
     return done
@@ -787,23 +828,37 @@ async def _archive_from_company_list(page: Page, list_name: str, logger) -> dict
 async def _unarchive_from_archived(page: Page, archived: Locator, logger) -> dict:
     logger.info("[WHATSAPP CHATS] Entrando a Archivados…")
     await archived.click(timeout=3000)
-    await page.wait_for_timeout(600)
-    rows = await _chat_rows(page)
+    rows = []
+    for _ in range(30):
+        await page.wait_for_timeout(150)
+        rows = await _chat_rows(page)
+        if rows:
+            break
+        empty = page.get_by_text(re.compile(r"(no (hay|ten[eé]s|tienes) chats archivados|no archived chats)", re.I))
+        if await _first_visible(empty) is not None:
+            return {"mode": "unarchive", "count": 0, "list": "Archivados"}
     if not rows:
-        return {"mode": "empty_archived", "count": 0, "list": "Archivados"}
+        raise RuntimeError("Archivados no terminó de cargar o su lista no pudo identificarse.")
     logger.info("[WHATSAPP CHATS] Hay %s chat(s) archivado(s) visibles. Desarchivando…", len(rows))
     count = await _process_all_rows(page, unarchive=True, logger=logger)
     return {"mode": "unarchive", "count": count, "list": "Archivados"}
 
 
-async def _toggle_once(context, cfg: dict, logger) -> dict:
+async def _toggle_once(context, cfg: dict, logger, mode="auto") -> dict:
     wa_cfg = cfg.get("whatsapp") or {}
     list_name = str(wa_cfg.get("company_chat_list") or "Smart Post").strip() or "Smart Post"
     page = context.pages[0] if context.pages else await context.new_page()
     page = await _ensure_live_page(context, page)
     await _open_home(page)
 
+    if mode == "unarchive":
+        from app.delivery.unarchive_all import unarchive_all
+        logger.info("[WHATSAPP CHATS] Desarchivar todos los chats de Archivados…")
+        return await unarchive_all(page, logger)
+
     archived = await _find_archived_entry(page)
+    if mode == "archive":
+        return await _archive_from_company_list(page, list_name, logger)
     if archived is not None:
         try:
             result = await _unarchive_from_archived(page, archived, logger)
@@ -812,31 +867,13 @@ async def _toggle_once(context, cfg: dict, logger) -> dict:
             logger.info("[WHATSAPP CHATS] Archivados está vacío. Los chats están desarchivados.")
             return await _archive_from_company_list(page, list_name, logger)
         except Exception as exc:
-            fallback = _time_fallback_mode()
-            if fallback is None:
-                raise
-            logger.warning(
-                "[WHATSAPP CHATS] No pude determinar/operar el estado por UI (%s). "
-                "Aplico fallback horario: %s.", exc, fallback,
-            )
-            if fallback == "archive":
-                page = await _ensure_live_page(context, page)
-                return await _archive_from_company_list(page, list_name, logger)
-
-            # Reintento de desarchivado. No navegamos sobre una pestaña cerrada:
-            # si WhatsApp la cerró, creamos una nueva dentro del mismo perfil.
-            page = await _ensure_live_page(context, page)
-            await _open_home(page)
-            archived2 = await _find_archived_entry(page)
-            if archived2 is None:
-                return {"mode": "unarchive", "count": 0, "list": "Archivados"}
-            return await _unarchive_from_archived(page, archived2, logger)
+            raise RuntimeError(f"No pude desarchivar los chats: {exc}") from exc
 
     logger.info("[WHATSAPP CHATS] No hay entrada Archivados. Los chats están desarchivados.")
     return await _archive_from_company_list(page, list_name, logger)
 
 
-async def toggle_company_chats(cfg: dict, logger) -> dict:
+async def toggle_company_chats(cfg: dict, logger, mode="auto") -> dict:
     """Archive/unarchive company chats with one automatic browser recovery.
 
     If WhatsApp unexpectedly closes the tab/context during a row action, relaunch
@@ -844,6 +881,8 @@ async def toggle_company_chats(cfg: dict, logger) -> dict:
     ``TargetClosedError``.
     """
     wa_cfg = cfg.get("whatsapp") or {}
+    if mode not in {"auto", "archive", "unarchive"}:
+        raise ValueError("Acción de chats inválida")
     profile = resolve_path(cfg, "whatsapp_profile")
     profile.mkdir(parents=True, exist_ok=True)
 
@@ -857,7 +896,7 @@ async def toggle_company_chats(cfg: dict, logger) -> dict:
             try:
                 if attempt == 2:
                     logger.warning("[WHATSAPP CHATS] WhatsApp cerró la pestaña/contexto. Reabriendo sesión y reintentando una vez…")
-                return await _toggle_once(context, cfg, logger)
+                return await _toggle_once(context, cfg, logger, mode=mode)
             except Exception as exc:
                 last_exc = exc
                 if not _is_target_closed_error(exc) or attempt == 2:

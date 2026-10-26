@@ -1,5 +1,7 @@
 #define MyAppName "SmartPost"
-#define MyAppVersion "2.5.6"
+#ifndef MyAppVersion
+  #define MyAppVersion "2.9.7"
+#endif
 #define MyAppPublisher "SmartPost"
 #define MyAppExeName "SmartPost.exe"
 
@@ -52,7 +54,7 @@ end;
 function InitializeSetup(): Boolean;
 begin
   Result := True;
-  if not ExcelRegistered() then
+  if not ExcelRegistered() and not WizardSilent() then
   begin
     MsgBox(
       'SmartPost se puede instalar, pero no se detectó Microsoft Excel de escritorio.' + #13#10 + #13#10 +

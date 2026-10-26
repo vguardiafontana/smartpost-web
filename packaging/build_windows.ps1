@@ -1,3 +1,7 @@
+param(
+    [string]$PythonExecutable = "python",
+    [string]$Version = "2.9.7"
+)
 $ErrorActionPreference = "Stop"
 $Root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 Set-Location $Root
@@ -19,11 +23,15 @@ function Invoke-Checked {
 
 function Remove-TreeRobust {
     param([Parameter(Mandatory=$true)][string]$Path)
-    if (-not (Test-Path $Path)) { return }
+    $resolved = [System.IO.Path]::GetFullPath($Path)
+    if (-not $resolved.StartsWith($Root + [System.IO.Path]::DirectorySeparatorChar, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "No se puede limpiar un directorio fuera del proyecto: $resolved"
+    }
+    if (-not (Test-Path -LiteralPath $resolved)) { return }
 
     for ($i = 1; $i -le 6; $i++) {
         try {
-            Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction Stop
+            Remove-Item -LiteralPath $resolved -Recurse -Force -ErrorAction Stop
             return
         }
         catch {
@@ -35,24 +43,16 @@ function Remove-TreeRobust {
     }
 }
 
-# Evita que una copia de SmartPost abierta bloquee DLL/PYD dentro de dist\SmartPost.
-$running = Get-Process -Name "SmartPost" -ErrorAction SilentlyContinue
-if ($running) {
-    Write-Host "SmartPost está abierto. Cerrando la aplicación para poder recompilar..."
-    $running | Stop-Process -Force -ErrorAction SilentlyContinue
-    Start-Sleep -Milliseconds 800
-}
-
 $Venv = Join-Path $Root ".build-venv"
 if (-not (Test-Path $Venv)) {
-    py -3 -m venv $Venv
+    & $PythonExecutable -m venv $Venv
     if ($LASTEXITCODE -ne 0) { throw "No pude crear el entorno virtual de build." }
 }
 $Python = Join-Path $Venv "Scripts\python.exe"
 $Pip = Join-Path $Venv "Scripts\pip.exe"
 
 Invoke-Checked $Python -m pip install --upgrade pip wheel
-Invoke-Checked $Pip install -r (Join-Path $Root "packaging\requirements-build.txt")
+Invoke-Checked $Python -m pip install -r (Join-Path $Root "packaging\requirements-build.txt")
 
 $BrowserDir = Join-Path $Root "build\playwright-browsers"
 New-Item -ItemType Directory -Force -Path $BrowserDir | Out-Null
@@ -67,6 +67,11 @@ if ($LASTEXITCODE -ne 0) {
 Write-Host "Playwright Node fuente OK -> $PlaywrightNode"
 
 # Tests que no requieren sesión real de Epresis/WhatsApp.
+$env:SMARTPOST_DATA_DIR = Join-Path $Root "build\test-data"
+$env:SMARTPOST_WEB_PIN = "246810"
+$env:SMARTPOST_WEB_SESSION_SECRET = "ci-only-test-secret-0123456789012345678901234567890123456789"
+$env:QT_QPA_PLATFORM = "offscreen"
+$env:SMARTPOST_TEST_BROWSER = (& $Python -c "from playwright.sync_api import sync_playwright; p=sync_playwright().start(); print(p.chromium.executable_path); p.stop()")
 Invoke-Checked $Python -m pytest -q tests
 
 # Limpieza robusta del build anterior. El error WinError 5 suele ocurrir si SmartPost sigue abierto.
@@ -85,6 +90,14 @@ if (-not $BundledNode) {
     throw "El build terminó pero no encuentro playwright/driver/node.exe dentro de dist\SmartPost. No se crea el instalador."
 }
 Write-Host "Playwright Node empaquetado OK -> $BundledNode"
+
+# Verify the frozen program, not just the source environment.
+$SmokeReport = Join-Path $Root "build\frozen-self-test.json"
+$AppProcess = Start-Process -FilePath (Join-Path $Root "dist\SmartPost\SmartPost.exe") -ArgumentList @("--self-test", ('"' + $SmokeReport + '"')) -WindowStyle Hidden -PassThru
+if (-not $AppProcess.WaitForExit(120000)) { $AppProcess.Kill(); throw "El ejecutable no terminó su prueba de arranque." }
+if ($AppProcess.ExitCode -ne 0 -or -not (Test-Path -LiteralPath $SmokeReport)) { throw "Falló la prueba del ejecutable empaquetado." }
+$SmokeResult = Get-Content -LiteralPath $SmokeReport -Raw | ConvertFrom-Json
+if (-not $SmokeResult.ok) { throw "El ejecutable empaquetado no pasó la validación: $($SmokeResult.error)" }
 
 $Signtool = Get-Command signtool.exe -ErrorAction SilentlyContinue
 $Thumbprint = $env:SMARTPOST_SIGN_CERT_THUMBPRINT
@@ -107,7 +120,8 @@ if (-not $Iscc) {
 }
 
 New-Item -ItemType Directory -Force -Path (Join-Path $Root "dist-installer") | Out-Null
-Invoke-Checked $Iscc (Join-Path $Root "packaging\SmartPost.iss")
+if ($Version -notmatch '^\d+\.\d+\.\d+(\.\d+)?$') { throw "Versión inválida: $Version" }
+Invoke-Checked $Iscc ("/DMyAppVersion=" + $Version) (Join-Path $Root "packaging\SmartPost.iss")
 
 $Installer = Join-Path $Root "dist-installer\SmartPost_Instalador.exe"
 if ($Signtool -and $Thumbprint -and (Test-Path $Installer)) {

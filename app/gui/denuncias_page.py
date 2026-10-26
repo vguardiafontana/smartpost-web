@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
     QDateEdit, QComboBox, QTextEdit, QMessageBox, QCheckBox, QScrollArea, QSizePolicy
 )
 
-from app.core.config import load_config
+from app.core.config import load_config, resolve_path
 from app.denuncias.narratives import ShipmentLine, generate_unknown_circumstances
 from app.denuncias.input_parser import parse_identifiers
 from app.gui.error_dialog import ErrorDialog
@@ -50,6 +50,8 @@ class DenunciasPage(QWidget):
         back = QPushButton("← Inicio"); back.clicked.connect(self.back_requested.emit)
         title = QLabel("Denuncias de siniestro"); title.setStyleSheet("font-size:22px;font-weight:800;")
         top.addWidget(back); top.addWidget(title); top.addStretch(1)
+        history = QPushButton("Ver denuncias descargadas / mensajes")
+        history.clicked.connect(self._open_history); top.addWidget(history)
         root.addLayout(top)
 
         hint = QLabel(
@@ -148,6 +150,12 @@ class DenunciasPage(QWidget):
         self.logs = QTextEdit(); self.logs.setReadOnly(True); self.logs.setMaximumHeight(120)
         self.logs.setStyleSheet("font-family:Consolas,monospace;font-size:10px;")
         root.addWidget(self.logs)
+
+    def _open_history(self):
+        from app.gui.denuncias_history_dialog import DenunciasHistoryDialog
+        folder = resolve_path(load_config(), "denuncias_output")
+        folder.mkdir(parents=True, exist_ok=True)
+        DenunciasHistoryDialog(folder, self).exec()
 
     def _clear_all(self):
         self.bulk_input.clear(); self.shipments = []; self.table.setRowCount(0); self.narrative.clear(); self.logs.clear()

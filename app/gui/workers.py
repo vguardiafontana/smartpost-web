@@ -138,6 +138,9 @@ class DenunciasSubmitWorker(QObject):
             self.log_line.emit("Iniciando formulario de Denuncias de Provincia…")
             pdf = asyncio.run(submit_gba_denuncia(cfg, self.driver, self.incident, self.narrative, logger.getChild("GBA"), dry_run=self.dry_run))
             summary = {"dry_run": self.dry_run, "send_whatsapp": self.send_whatsapp, "pdf": str(pdf) if pdf else "", "whatsapp": []}
+            if pdf is not None and not self.dry_run:
+                from app.denuncias.history import save_history
+                save_history(pdf, self.shipments, cfg)
             if pdf is not None and not self.dry_run and self.send_whatsapp:
                 grouped = {}
                 for s in self.shipments:
@@ -242,6 +245,10 @@ class WhatsAppArchiveToggleWorker(QObject):
     log_line = Signal(str)
     finished = Signal(bool, object, str)
 
+    def __init__(self, mode="auto"):
+        super().__init__()
+        self.mode = mode
+
     @Slot()
     def run(self):
         try:
@@ -250,7 +257,7 @@ class WhatsAppArchiveToggleWorker(QObject):
             run_id = datetime.now().strftime("whatsapp_chats_%Y%m%d_%H%M%S")
             handler = GuiLogHandler(self.log_line.emit)
             logger = setup_logging(resolve_path(cfg, "logs"), run_id, False, extra_handlers=[handler])
-            result = asyncio.run(toggle_company_chats(cfg, logger.getChild("WHATSAPP_CHATS")))
+            result = asyncio.run(toggle_company_chats(cfg, logger.getChild("WHATSAPP_CHATS"), mode=self.mode))
             self.finished.emit(True, result, "")
         except Exception:
             self.finished.emit(False, {}, traceback.format_exc())
@@ -282,10 +289,11 @@ class CambioEstadoV2Worker(QObject):
     log_line = Signal(str)
     finished = Signal(bool, object, str)
 
-    def __init__(self, identifiers, state_id: int):
+    def __init__(self, identifiers, state_id: int, selected_date=None):
         super().__init__()
         self.identifiers = list(identifiers or [])
         self.state_id = int(state_id)
+        self.selected_date = selected_date
 
     @Slot()
     def run(self):
@@ -295,7 +303,7 @@ class CambioEstadoV2Worker(QObject):
             run_id = datetime.now().strftime("cambio_estado_v2_%Y%m%d_%H%M%S")
             handler = GuiLogHandler(self.log_line.emit)
             logger = setup_logging(resolve_path(cfg, "logs"), run_id, False, extra_handlers=[handler])
-            rows = asyncio.run(change_state_v2(cfg, self.identifiers, self.state_id, logger.getChild("CAMBIO_ESTADO_V2")))
+            rows = asyncio.run(change_state_v2(cfg, self.identifiers, self.state_id, logger.getChild("CAMBIO_ESTADO_V2"), selected_date=self.selected_date))
             self.finished.emit(True, rows, "")
         except Exception:
             self.finished.emit(False, [], traceback.format_exc())

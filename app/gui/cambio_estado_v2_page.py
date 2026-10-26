@@ -1,15 +1,16 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Signal, QThread
+from PySide6.QtCore import Signal, QThread, QDate
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QTextEdit, QGroupBox,
-    QComboBox, QTableWidget, QTableWidgetItem, QHeaderView, QMessageBox
+    QComboBox, QTableWidget, QTableWidgetItem, QHeaderView, QMessageBox, QDateEdit
 )
 
 from app.cambio_estado.states import STATES
 from app.cambio_estado.service import extract_identifiers
 from app.gui.error_dialog import ErrorDialog
 from app.gui.workers import CambioEstadoV2Worker
+from app.core.dates import operation_date
 
 
 class CambioEstadoV2Page(QWidget):
@@ -30,7 +31,7 @@ class CambioEstadoV2Page(QWidget):
 
         info = QLabel(
             "Nuevo flujo por Rendición de Chofer. SmartPost resuelve cada pedido, identifica su distribuidor, "
-            "busca la planilla del día, verifica que el pedido esté dentro de esa planilla y agrupa los cambios por chofer/planilla."
+            "busca la planilla de la fecha seleccionada, verifica que el pedido esté dentro de esa planilla y agrupa los cambios por chofer/planilla."
         )
         info.setWordWrap(True); info.setStyleSheet("color:#7a4b00;background:#fff3cd;padding:9px;border-radius:6px;")
         root.addWidget(info)
@@ -43,6 +44,11 @@ class CambioEstadoV2Page(QWidget):
             self.state_combo.addItem(label, state_id)
         self.state_combo.setMinimumWidth(360)
         state_row.addWidget(self.state_combo); state_row.addStretch(1); cv.addLayout(state_row)
+        day = operation_date()
+        self.date_edit = QDateEdit(QDate(day.year, day.month, day.day))
+        self.date_edit.setCalendarPopup(True); self.date_edit.setDisplayFormat("dd/MM/yyyy")
+        date_row = QHBoxLayout(); date_row.addWidget(QLabel("Fecha de planilla y cambio:"))
+        date_row.addWidget(self.date_edit); date_row.addStretch(1); cv.addLayout(date_row)
 
         self.bulk_input = QTextEdit()
         self.bulk_input.setPlaceholderText(
@@ -85,6 +91,7 @@ class CambioEstadoV2Page(QWidget):
         self.change_btn.setEnabled(not busy)
         self.bulk_input.setEnabled(not busy)
         self.state_combo.setEnabled(not busy)
+        self.date_edit.setEnabled(not busy)
 
     def _change(self):
         identifiers = extract_identifiers(self.bulk_input.toPlainText())
@@ -93,10 +100,12 @@ class CambioEstadoV2Page(QWidget):
             return
         state_id = int(self.state_combo.currentData())
         state_text = self.state_combo.currentText()
+        selected_date = self.date_edit.date().toString("yyyy-MM-dd")
         confirm = QMessageBox.question(
             self,
             "Confirmar Cambio de estado v2",
             f"Se procesarán {len(identifiers)} entrada(s) con el estado:\n\n{state_text}\n\n"
+            f"Fecha: {self.date_edit.date().toString('dd/MM/yyyy')}.\n"
             "Se usará Rendición de Chofer y se agruparán los pedidos por planilla. ¿Continuar?",
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No,
@@ -108,7 +117,7 @@ class CambioEstadoV2Page(QWidget):
         self.summary_label.setText(f"Procesando {len(identifiers)} entrada(s) → {state_text}…")
         self.logs.append(f"Iniciando Cambio de estado v2 a {state_text}…")
         self.thread = QThread(self)
-        self.worker = CambioEstadoV2Worker(identifiers, state_id)
+        self.worker = CambioEstadoV2Worker(identifiers, state_id, selected_date)
         self.worker.moveToThread(self.thread)
         self.thread.started.connect(self.worker.run)
         self.worker.log_line.connect(self.logs.append)

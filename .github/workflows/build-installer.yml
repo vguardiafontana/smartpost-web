@@ -1,31 +1,118 @@
-name: Build SmartPost Windows Installer
+name: Build and release SmartPost Desktop
 
 on:
   workflow_dispatch:
   push:
-    tags:
-      - 'v*'
+    branches: [main]
+    paths:
+      - 'desktop.py'
+      - 'packaging/**'
+      - 'requirements.txt'
+      - 'requirements-web.txt'
+      - 'assets/**'
+      - 'config.default.yaml'
+      - 'app/**'
+      - '!app/web/**'
+      - '.github/workflows/build-installer.yml'
+      - '.gitattributes'
+
+permissions:
+  contents: read
 
 jobs:
-  windows-installer:
+  build:
     runs-on: windows-latest
+    timeout-minutes: 35
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
-          architecture: 'x64'
-      - name: Install Inno Setup
-        shell: powershell
-        run: choco install innosetup --no-progress -y
-      - name: Build installer
-        shell: powershell
+          architecture: x64
+      - name: Installer version
+        id: version
+        shell: pwsh
         run: |
-          Set-ExecutionPolicy -Scope Process Bypass
-          .\packaging\build_windows.ps1
-      - name: Upload installer
-        uses: actions/upload-artifact@v4
+          $text = Get-Content packaging/SmartPost.iss -Raw
+          $baseVersion = [regex]::Match($text, '#define MyAppVersion "(\d+\.\d+\.\d+)"').Groups[1].Value
+          if (-not $baseVersion) { throw 'Missing Desktop base version' }
+          $version = "$baseVersion.$env:GITHUB_RUN_NUMBER"
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "tag=desktop-v$version" >> $env:GITHUB_OUTPUT
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress -y
+          if ($LASTEXITCODE -ne 0) { throw 'Inno Setup installation failed' }
+      - name: Build and test standalone installer
+        shell: pwsh
+        env:
+          DESKTOP_VERSION: ${{ steps.version.outputs.version }}
+        run: ./packaging/build_windows.ps1 -PythonExecutable python -Version $env:DESKTOP_VERSION
+      - name: Test a clean installation
+        shell: pwsh
+        run: |
+          $destination = Join-Path $env:RUNNER_TEMP 'SmartPost-installed'
+          $installer = Start-Process -FilePath dist-installer/SmartPost_Instalador.exe -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-',('/DIR="'+$destination+'"')) -WindowStyle Hidden -PassThru
+          if (-not $installer.WaitForExit(120000)) { $installer.Kill(); throw 'Installer timed out' }
+          if ($installer.ExitCode -ne 0) { throw "Installer failed: $($installer.ExitCode)" }
+          $report = Join-Path $env:RUNNER_TEMP 'installed-self-test.json'
+          $app = Start-Process -FilePath (Join-Path $destination 'SmartPost.exe') -ArgumentList @('--self-test',('"'+$report+'"')) -WindowStyle Hidden -PassThru
+          if (-not $app.WaitForExit(120000)) { $app.Kill(); throw 'Installed application timed out' }
+          if ($app.ExitCode -ne 0 -or -not (Test-Path $report)) { throw 'Installed application failed its startup test' }
+          $result = Get-Content $report -Raw | ConvertFrom-Json
+          if (-not $result.ok) { throw $result.error }
+          Copy-Item $report dist-installer/installed-self-test.json
+          $hash = (Get-FileHash dist-installer/SmartPost_Instalador.exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  SmartPost_Instalador.exe" | Set-Content dist-installer/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v7
         with:
-          name: SmartPost_Instalador
-          path: dist-installer/SmartPost_Instalador.exe
+          name: SmartPost-verified-installer
+          path: |
+            dist-installer/SmartPost_Instalador.exe
+            dist-installer/SHA256SUMS.txt
+            dist-installer/installed-self-test.json
           if-no-files-found: error
+          retention-days: 7
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v8
+        with:
+          name: SmartPost-verified-installer
+          path: release-assets
+      - name: Publish verified installer
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.build.outputs.tag }}
+          DESKTOP_VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          set -euo pipefail
+          (cd release-assets && sha256sum --check SHA256SUMS.txt)
+          python -c "import json; assert json.load(open('release-assets/installed-self-test.json'))['ok']"
+          if gh release view "$RELEASE_TAG" --json isDraft --jq '.isDraft' > release-state.txt 2>/dev/null; then
+            if [ "$(cat release-state.txt)" = false ]; then
+              echo 'This verified release is already published.'
+              exit 0
+            fi
+          else
+            gh release create "$RELEASE_TAG" --target "$GITHUB_SHA" --title "SmartPost Desktop $DESKTOP_VERSION" --notes-file packaging/RELEASE_NOTES.md --draft
+          fi
+          gh release upload "$RELEASE_TAG" release-assets/SmartPost_Instalador.exe release-assets/SHA256SUMS.txt release-assets/installed-self-test.json --clobber
+          latest_tag=$(gh release view --json tagName --jq '.tagName' 2>/dev/null || true)
+          make_latest=$(LATEST_TAG="$latest_tag" python -c "import os; parse=lambda s:tuple(map(int,s.removeprefix('desktop-v').split('.'))) if s.startswith('desktop-v') else (); print(str(parse(os.environ['RELEASE_TAG']) >= parse(os.environ.get('LATEST_TAG',''))).lower())")
+          gh release edit "$RELEASE_TAG" --draft=false --latest="$make_latest"

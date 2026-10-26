@@ -81,11 +81,15 @@ class MainWindow(QMainWindow):
 
         side_tools = QHBoxLayout()
         side_tools.addStretch(1)
-        self.archive_toggle_btn = QPushButton("Archivar / desarchivar")
-        self.archive_toggle_btn.setToolTip("Archiva todos los chats de la lista Smart Post o, si hay chats archivados, los desarchiva todos.")
+        self.archive_toggle_btn = QPushButton("Archivar Smart Post")
+        self.archive_toggle_btn.setToolTip("Archiva los chats de la lista Smart Post y verifica cada cambio.")
         self.archive_toggle_btn.setMaximumWidth(180)
-        self.archive_toggle_btn.clicked.connect(self._toggle_whatsapp_archive)
+        self.archive_toggle_btn.clicked.connect(lambda: self._toggle_whatsapp_archive("archive"))
         side_tools.addWidget(self.archive_toggle_btn)
+        self.unarchive_btn = QPushButton("Desarchivar chats")
+        self.unarchive_btn.setToolTip("Desarchiva todos los chats de Archivados y verifica cada cambio.")
+        self.unarchive_btn.clicked.connect(lambda: self._toggle_whatsapp_archive("unarchive"))
+        side_tools.addWidget(self.unarchive_btn)
         layout.addLayout(side_tools)
 
         cards = QGridLayout(); cards.setHorizontalSpacing(18); cards.setVerticalSpacing(18)
@@ -148,13 +152,14 @@ class MainWindow(QMainWindow):
         self.summary.verticalHeader().setVisible(False); sv.addWidget(self.summary); body.addWidget(summary_box,2); root.addLayout(body,1)
         return page
 
-    def _toggle_whatsapp_archive(self):
+    def _toggle_whatsapp_archive(self, mode="auto"):
         if self.chat_thread is not None:
             return
         self.archive_toggle_btn.setEnabled(False)
+        self.unarchive_btn.setEnabled(False)
         self.statusBar().showMessage("Abriendo WhatsApp para archivar/desarchivar chats…")
         self.chat_thread = QThread(self)
-        self.chat_worker = WhatsAppArchiveToggleWorker()
+        self.chat_worker = WhatsAppArchiveToggleWorker(mode)
         self.chat_worker.moveToThread(self.chat_thread)
         self.chat_thread.started.connect(self.chat_worker.run)
         self.chat_worker.finished.connect(self._toggle_whatsapp_archive_finished)
@@ -170,6 +175,7 @@ class MainWindow(QMainWindow):
 
     def _toggle_whatsapp_archive_finished(self, ok: bool, result, detail: str):
         self.archive_toggle_btn.setEnabled(True)
+        self.unarchive_btn.setEnabled(True)
         if not ok:
             self.statusBar().showMessage("Error al archivar/desarchivar chats")
             ErrorDialog(detail, self).exec()
