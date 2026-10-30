@@ -143,18 +143,27 @@ def _cap_row_heights(ws, start_row: int, end_row: int, max_height: float) -> Non
     try:
         ws.Rows(f"{start_row}:{end_row}").AutoFit()
         # Excel returns one height for a uniform range, None for mixed heights.
-        # Split only mixed ranges: thousands of ordinary rows need one COM read.
-        pending = [(start_row, end_row)]
-        while pending:
-            first, last = pending.pop()
+        # Try the full range, then blocks. Mixed blocks use individual reads;
+        # a recursive split could otherwise double COM calls on alternating rows.
+        whole = ws.Rows(f"{start_row}:{end_row}")
+        height = whole.RowHeight
+        if height is not None:
+            if float(height) > max_height:
+                whole.RowHeight = max_height
+            return
+        for first in range(start_row, end_row + 1, 64):
+            last = min(first + 63, end_row)
             group = ws.Rows(f"{first}:{last}")
             height = group.RowHeight
             if height is not None:
                 if float(height) > max_height:
                     group.RowHeight = max_height
-            elif first < last:
-                middle = (first + last) // 2
-                pending.extend(((first, middle), (middle + 1, last)))
+                continue
+            for index in range(first, last + 1):
+                row = ws.Rows(index)
+                height = row.RowHeight
+                if height is not None and float(height) > max_height:
+                    row.RowHeight = max_height
     except Exception:
         # Row-height differences should never corrupt the report; the structural
         # and data audit below remains authoritative.

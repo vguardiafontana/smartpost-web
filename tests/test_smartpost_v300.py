@@ -104,13 +104,14 @@ class Sheet:
         return Range()
 
 
-@pytest.mark.parametrize('heights', [[15.0] * 1000, [80.0] * 1000, [15., 90., 40., 100., 60., 14.]])
+@pytest.mark.parametrize('heights', [[15.0] * 1000, [80.0] * 1000, [15., 90., 40., 100., 60., 14.], [15., 90.] * 500])
 def test_bulk_row_height_optimization_keeps_all_existing_heights(heights):
     sheet = Sheet(heights)
     _cap_row_heights(sheet, 1, len(heights), 60.)
     assert sheet.heights == [min(h, 60.) for h in heights]
     assert sheet.autofits == 1
     if len(set(heights)) == 1: assert sheet.reads == 1
+    else: assert sheet.reads <= len(heights) + (len(heights) + 63) // 64 + 1
 
 
 def test_desktop_modules_navigation_icon_and_silent_launch(tmp_path, monkeypatch):
