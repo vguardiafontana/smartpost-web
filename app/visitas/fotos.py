@@ -3,6 +3,9 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 import json
+import re
+import unicodedata
+from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 
 from playwright.async_api import async_playwright
 
@@ -16,6 +19,80 @@ from app.descarga.epresis_api import EpresisAPI
 
 # IDs existentes en config.default.yaml. Los demás estados de VISITAS no aplican.
 VISIT_STATE_IDS = (127, 119, 183, 117)
+VISIT_NUMBER_BY_STATE = {127: 1, 119: 2, 183: 3}
+
+
+def required_visit_photos(row, details=None):
+    """Each completed visit needs one photo, including subsequent visits."""
+    state = row.get('estado')
+    state_id = state.get('id') if isinstance(state, dict) else row.get('estado_id')
+    try:
+        if int(state_id) in VISIT_NUMBER_BY_STATE:
+            return VISIT_NUMBER_BY_STATE[int(state_id)]
+    except (TypeError, ValueError):
+        pass
+    text = ' '.join(str(value or '') for value in (
+        (details or {}).get('estado'), state, row.get('estado_nombre'), row.get('estado_codigo'),
+    ))
+    text = ''.join(c for c in unicodedata.normalize('NFD', text.upper()) if not unicodedata.combining(c))
+    match = re.search(r'(\d+)\s*(?:[°ºª.]|RA|DA|TA|ERA|ER|RO|DO)?\s*VISITA|\b(\d+)RVT\b', text)
+    if match:
+        return max(1, int(match.group(1) or match.group(2)))
+    for word, count in (('PRIMERA', 1), ('SEGUNDA', 2), ('TERCERA', 3), ('CUARTA', 4)):
+        if re.search(r'\b' + word + r'\s+VISITA\b', text):
+            return count
+    # Reprogramación does not specify an additional completed visit.
+    return 1
+
+
+def photo_count_from_payload(payload):
+    """A conservative lower bound; duplicate links/metadata count only once.
+
+    A photo flag is not an exact count. It can avoid a request for visit one,
+    but cannot establish that visit two or three has all its evidence.
+    """
+    urls, lower_bounds = set(), [0]
+    photo = re.compile(r'foto|photo|imagen|image|evidencia|proof', re.I)
+    excluded = re.compile(r'distribuidor|chofer|perfil|avatar|logo|cliente|placeholder|no[-_ ]?image|sin[-_ ]?foto|default', re.I)
+
+    def walk(value, path='', evidence=False):
+        if excluded.search(path):
+            return
+        if isinstance(value, dict):
+            if evidence:
+                # One evidence object may expose both original and thumbnail.
+                for key in ('url', 'href', 'archivo', 'path', 'src', 'original', 'thumbnail'):
+                    if isinstance(value.get(key), str) and value[key].strip():
+                        walk(value[key], path + ' ' + key, True)
+                        return
+            for key, child in value.items():
+                walk(child, path + ' ' + str(key), evidence or bool(photo.search(str(key))))
+        elif isinstance(value, (list, tuple)):
+            for child in value:
+                walk(child, path, evidence)
+        elif evidence and value:
+            if isinstance(value, bool):
+                lower_bounds.append(int(value))
+            elif isinstance(value, (int, float)):
+                if value > 0 and re.search(r'cantidad|count|total', path, re.I):
+                    lower_bounds.append(int(value))
+                elif value > 0:
+                    lower_bounds.append(1)
+            else:
+                value = str(value).strip()
+                if excluded.search(value):
+                    return
+                if re.search(r'\.(jpe?g|png|webp|gif)(?:[?#]|$)', value, re.I) or value.startswith(('http://', 'https://', '/', 'data:image/')):
+                    parts = urlsplit(value)
+                    params = [(k, v) for k, v in parse_qsl(parts.query) if k.lower() not in ('w', 'h', 'width', 'height', 'quality', 'thumbnail', 'thumb', 'resize', 'token', 'signature', 'expires')]
+                    urls.add(urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(params), '')))
+                elif value.isdigit() and re.search(r'cantidad|count|total', path, re.I):
+                    lower_bounds.append(int(value))
+                elif value.lower() in ('true', 'si', 'sí', 'yes'):
+                    lower_bounds.append(1)
+
+    walk(payload)
+    return max(len(urls), *lower_bounds)
 
 
 def today_visits() -> str:
@@ -72,37 +149,60 @@ async def collect_visit_rows(api, date: str) -> list[dict]:
     return rows
 
 
-async def photo_from_guide_page(page) -> bool:
+async def photo_count_from_guide_page(page) -> int:
     """Cuenta imágenes o enlaces de evidencia; no botones vacíos para cargar fotos.
 
     Usa el mismo show de Búsqueda de guías. Los errores se propagan para no
     convertir fallas de consulta en un resultado 'No'.
     """
-    return bool(await page.evaluate(r'''() => {
+    return int(await page.evaluate(r'''() => {
       const norm=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
       const excluded=/(logo|avatar|perfil|distribuidor|chofer|placeholder|no[-_ ]?image|sin[-_ ]?foto|default)/i;
       const photo=/(foto|photo|imagen|image|evidencia|proof)/i;
       const valid=s=>!!s && s!=='#' && !/^(javascript:|about:)/i.test(s);
+      const photos=new Set();
       for(const el of document.querySelectorAll('img[src],a[href],[data-lightbox],[data-fancybox]')) {
-        const src=el.getAttribute('href')||el.getAttribute('src')||'';
+        const anchor=el.tagName==='IMG'?el.closest('a[href]'):null;
+        const linked=anchor?.getAttribute('href');
+        const src=(valid(linked)&&!excluded.test(linked)?linked:null)||el.getAttribute('href')||el.getAttribute('src')||'';
         if(!valid(src)) continue;
         const context=norm(src+' '+(el.getAttribute('alt')||'')+' '+(el.getAttribute('title')||'')+' '+(el.closest('tr,.form-group,.card,.panel')?.textContent||''));
         if(excluded.test(norm(src+' '+(el.getAttribute('alt')||'')))) continue;
         const imageFile=/\.(jpe?g|png|webp|gif)(?:[?#]|$)/i.test(src)||/^data:image\//i.test(src);
-        if(imageFile && (photo.test(context)||el.hasAttribute('data-lightbox')||el.hasAttribute('data-fancybox'))) return true;
-        if(el.tagName==='IMG' && photo.test(context)) return true;
+        if((imageFile && photo.test(context)) || el.hasAttribute('data-lightbox') || el.hasAttribute('data-fancybox') ||
+           (el.tagName==='IMG' && photo.test(context))) {
+          try {
+            const url=new URL(src,document.baseURI);url.hash='';
+            for(const key of [...url.searchParams.keys()]) if(['w','h','width','height','quality','thumbnail','thumb','resize','token','signature','expires'].includes(key.toLowerCase())) url.searchParams.delete(key);
+            photos.add(url.href);
+          }
+          catch { photos.add(src); }
+        }
       }
-      return false;
+      return photos.size;
     }'''))
+
+
+async def photo_from_guide_page(page) -> bool:
+    return await photo_count_from_guide_page(page) > 0
+
+
+def _classify(details, count, required):
+    details.update(foto='Sí' if count >= required else 'No',
+                   fotos_cargadas=count, fotos_requeridas=required,
+                   fotos_pendientes=max(0, required - count),
+                   fotos_resumen=f'{count} / {required}')
+    return details
 
 
 async def inspect_visit(page, row: dict, settings: dict) -> dict:
     guide = str(row.get('id') or row.get('retiro_id'))
     details = _details_from_row(row, guide)
     details['show_url'] = settings['base_url'].rstrip('/') + f'/guias/editar-guia-v2/show/{guide}'
-    if _photo_from_payload(row):
-        details['foto'] = 'Sí'
-        return details
+    required = required_visit_photos(row, details)
+    count = photo_count_from_payload(row)
+    if count >= required:
+        return _classify(details, count, required)
     try:
         response = await page.goto(details['show_url'], wait_until='networkidle', timeout=settings['request_timeout_ms'])
         if response is None or not response.ok or page.url.rstrip('/') != details['show_url'].rstrip('/'):
@@ -111,10 +211,15 @@ async def inspect_visit(page, row: dict, settings: dict) -> dict:
         if not labeled:
             raise RuntimeError('La ficha no devolvió datos verificables.')
         details = _merge_show(details, labeled)
-        details['foto'] = 'Sí' if await photo_from_guide_page(page) else 'No'
+        required = required_visit_photos(row, details)
+        # The grid and guide page can expose the same photos: never add them.
+        count = max(count, await photo_count_from_guide_page(page))
+        return _classify(details, count, required)
     except Exception:
         details['foto'] = 'Sin verificar'
         details['photo_error'] = 'No se pudo verificar la foto. Volvé a consultar o abrí la guía.'
+        details['fotos_requeridas'] = required
+        details['fotos_resumen'] = f'Sin verificar / {required}'
     return details
 
 

@@ -27,7 +27,10 @@ class VisitPhotosWorker(QObject):
 
 class VisitasFotosPage(BusquedaGuiasPage):
     # Reutiliza la tabla copiable, enlaces y ordenación de Búsqueda de guías.
-    COLUMNS = [column for column in BusquedaGuiasPage.COLUMNS if column[0] not in ('distribuidor_dni', 'distribuidor_telefono')]
+    COLUMNS = [column for column in BusquedaGuiasPage.COLUMNS if column[0] not in ('distribuidor_dni', 'distribuidor_telefono', '__action__')] + [
+        ('fotos_resumen', 'Fotos / visitas', 130), ('fotos_pendientes', 'Pendientes', 100),
+        ('__action__', 'Acción', 130),
+    ]
 
     def _build_ui(self):
         self.result = None
@@ -40,12 +43,12 @@ class VisitasFotosPage(BusquedaGuiasPage):
         title.setStyleSheet('font-size:22px;font-weight:800;')
         nav.addWidget(self.back_btn); nav.addWidget(title); nav.addStretch()
         root.addLayout(nav)
-        help_text = QLabel('Pedidos ingresados hoy a planta · Primera, segunda y tercera visita y reprogramación.')
+        help_text = QLabel('Pedidos ingresados hoy a planta. Cada visita necesita su foto: 2.ª visita, al menos 2 fotos; 3.ª visita, al menos 3.')
         help_text.setWordWrap(True)
         root.addWidget(help_text)
         controls = QHBoxLayout()
-        controls.addWidget(QLabel('Visitas con foto:'))
-        self.yes_btn = QPushButton('Sí'); self.no_btn = QPushButton('No')
+        controls.addWidget(QLabel('Fotos de la visita:'))
+        self.yes_btn = QPushButton('Completas'); self.no_btn = QPushButton('Pendientes')
         for button, value in ((self.yes_btn, 'Sí'), (self.no_btn, 'No')):
             button.setCheckable(True)
             button.clicked.connect(lambda checked=False, value=value: self._choose(value))

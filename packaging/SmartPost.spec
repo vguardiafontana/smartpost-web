@@ -18,6 +18,8 @@ datas = [
     (str(ROOT / "assets" / "TEMPLATE_REPORTE.xlsx"), "assets"),
     (str(ROOT / "assets" / "PROMPT_MAESTRO.md"), "assets"),
     (str(ROOT / "assets" / "smartpost.ico"), "assets"),
+    (str(ROOT / "assets" / "fonts"), "assets/fonts"),
+    (str(ROOT / "assets" / "icons"), "assets/icons"),
     (str(ROOT / "config.default.yaml"), "."),
     (str(BROWSERS), "playwright-browsers"),
 ]

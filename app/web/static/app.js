@@ -9,9 +9,9 @@ async function api(path,options={}){
   return data;
 }
 function toast(msg){$('toast').textContent=msg;$('toast').classList.remove('hidden');setTimeout(()=>$('toast').classList.add('hidden'),2600)}
-function showLogin(){$('loginView').classList.remove('hidden');$('appView').classList.add('hidden');$('logoutBtn').classList.add('hidden');$('pageTitle').textContent='SmartPost'}
-function showApp(){$('loginView').classList.add('hidden');$('appView').classList.remove('hidden');$('logoutBtn').classList.remove('hidden')}
-function step(name){['homeStep','composeStep','jobStep','searchStep','reportsStep','visitPhotosStep'].forEach(id=>$(id).classList.toggle('hidden',id!==name));$('pageTitle').textContent=name==='composeStep'||name==='jobStep'?'Cambio de estado v2':name==='searchStep'?'Búsqueda de guías':name==='reportsStep'?'Reportes y Visitas':name==='visitPhotosStep'?'Visitas sin foto':'SmartPost'}
+function showLogin(){$('workspaceNav').classList.add('hidden');document.body.classList.remove('authenticated');$('loginView').classList.remove('hidden');$('appView').classList.add('hidden');$('logoutBtn').classList.add('hidden');$('pageTitle').textContent='SmartPost'}
+function showApp(){$('workspaceNav').classList.remove('hidden');document.body.classList.add('authenticated');$('loginView').classList.add('hidden');$('appView').classList.remove('hidden');$('logoutBtn').classList.remove('hidden')}
+function step(name){document.querySelectorAll('[data-step]').forEach(b=>{const active=b.dataset.step===name||(name==='jobStep'&&b.dataset.step==='composeStep');b.classList.toggle('active',active);if(active)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')});['homeStep','composeStep','jobStep','searchStep','reportsStep','visitPhotosStep'].forEach(id=>$(id).classList.toggle('hidden',id!==name));$('pageTitle').textContent=name==='composeStep'||name==='jobStep'?'Cambio de estado v2':name==='searchStep'?'Búsqueda de guías':name==='reportsStep'?'Reportes y Visitas':name==='visitPhotosStep'?'Visitas sin foto':'SmartPost'}
 function esc(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
 function safeUrl(v){const s=String(v||'');return /^https:\/\//i.test(s)?s:''}
 
@@ -23,6 +23,7 @@ async function loadStates(){const d=await api('/api/states');$('stateSelect').in
 
 $('loginForm').addEventListener('submit',async e=>{e.preventDefault();$('loginError').textContent='';try{await api('/api/auth/login',{method:'POST',body:JSON.stringify({pin:$('pinInput').value})});$('pinInput').value='';showApp();await loadStates();await resumeBatch()}catch(err){$('loginError').textContent=err.message}})
 $('logoutBtn').addEventListener('click',async()=>{try{await api('/api/auth/logout',{method:'POST'})}catch{}clearTimeout(pollTimer);localStorage.removeItem('smartpost_last_job');localStorage.removeItem('smartpost_pending_batch');currentJobId=null;showLogin()})
+document.querySelectorAll('[data-step]').forEach(button=>button.addEventListener('click',()=>{clearTimeout(pollTimer);clearTimeout(reportPollTimer);clearTimeout(visitPhotoTimer);const target=button.dataset.step;step(target);if(target==='jobStep'&&currentJobId)pollJob(currentJobId);if(target==='reportsStep'&&currentReportJobId)pollReportJob(currentReportJobId);if(target==='visitPhotosStep'&&visitPhotoJobId)pollVisitPhotos(visitPhotoJobId)}));
 $('openV2Btn').addEventListener('click',()=>step('composeStep'));
 $('openSearchBtn').addEventListener('click',()=>step('searchStep'));
 $('openReportsBtn').addEventListener('click',()=>{step('reportsStep');if(currentReportJobId)pollReportJob(currentReportJobId)});
@@ -163,7 +164,8 @@ async function copyGuideText(text){
 }
 function renderGuideTable(targetId,rows,contacts=false,page=0){
   const target=$(targetId),size=100,start=page*size,visible=rows.slice(start,start+size);
-  const columns=contacts?[...guideColumns,['distribuidor_dni','DNI distribuidor'],['distribuidor_telefono','Tel. distribuidor']]:guideColumns;
+  const baseColumns=targetId.startsWith('visitPhotos')?[...guideColumns,['fotos_resumen','Fotos / visitas'],['fotos_pendientes','Pendientes']]:guideColumns;
+  const columns=contacts?[...baseColumns,['distribuidor_dni','DNI distribuidor'],['distribuidor_telefono','Tel. distribuidor']]:baseColumns;
   if(!rows.length){target.innerHTML='<p class="muted">No hay guías que coincidan con este filtro.</p>';target.onclick=null;return;}
   target.innerHTML=`<div class="guide-tools"><span>${start+1}–${Math.min(start+size,rows.length)} de ${rows.length} guías</span><button class="secondary" data-guide-action="copy-all">Copiar guías</button></div><p class="muted small">Deslizá la tabla hacia los costados para ver todas las columnas.</p><div class="guide-table-scroll" tabindex="0" role="region" aria-label="Resultados de guías"><table class="guide-table"><thead><tr>${columns.map(([,label])=>`<th scope="col">${esc(label)}</th>`).join('')}<th scope="col">Acción</th></tr></thead><tbody>${visible.map((row,i)=>{
     if(row.error)return `<tr><td>${esc(row.entrada||'—')}</td><td colspan="${columns.length}">${esc(row.error)}</td></tr>`;
@@ -186,7 +188,7 @@ function renderVisitPhotos(){
   if(!visitPhotoResult)return;
   const data=visitPhotoResult,rows=data.rows.filter(r=>r.foto===visitPhotoChoice),unknown=data.rows.filter(r=>r.foto==='Sin verificar');
   $('visitPhotosResults').classList.remove('hidden');
-  $('visitPhotosSummary').textContent=`${data.date.split('-').reverse().join('/')} · ${rows.length} visitas ${visitPhotoChoice==='Sí'?'con':'sin'} foto · ${data.rows.length} revisadas · ${unknown.length} sin verificar`;
+  $('visitPhotosSummary').textContent=`${data.date.split('-').reverse().join('/')} · ${rows.length} visitas ${visitPhotoChoice==='Sí'?'con fotos completas':'con fotos pendientes'} · ${data.rows.length} revisadas · ${unknown.length} sin verificar`;
   renderGuideTable('visitPhotosRows',rows);
   $('visitPhotosUnknown').classList.toggle('hidden',!unknown.length);
   $('visitPhotosUnknownTitle').textContent=`${unknown.length} guías sin verificar`;

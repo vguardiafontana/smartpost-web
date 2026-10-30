@@ -68,7 +68,7 @@ def test_photo_from_successful_guide_page(monkeypatch, present, expected):
     page.url = url
     page.goto.return_value.ok = True
     monkeypatch.setattr(fotos, '_scrape_labeled_values', AsyncMock(return_value={'Estado': '1° VISITA'}))
-    monkeypatch.setattr(fotos, 'photo_from_guide_page', AsyncMock(return_value=present))
+    monkeypatch.setattr(fotos, 'photo_count_from_guide_page', AsyncMock(return_value=int(present)))
     result = asyncio.run(fotos.inspect_visit(page, {'id': 12345}, {'base_url': 'https://example.test', 'request_timeout_ms': 1000}))
     assert result['foto'] == expected
 
@@ -88,7 +88,7 @@ def test_failed_photo_lookup_is_unknown_not_no(monkeypatch, failure):
     if failure == 'login': page.url = 'https://example.test/login'
     if failure == 'timeout': page.goto.side_effect = TimeoutError
     monkeypatch.setattr(fotos, '_scrape_labeled_values', AsyncMock(return_value={} if failure == 'empty' else {'Estado': 'VISITA'}))
-    monkeypatch.setattr(fotos, 'photo_from_guide_page', AsyncMock(side_effect=RuntimeError('failed')))
+    monkeypatch.setattr(fotos, 'photo_count_from_guide_page', AsyncMock(side_effect=RuntimeError('failed')))
     result = asyncio.run(fotos.inspect_visit(page, {'id': 12345}, {'base_url': 'https://example.test', 'request_timeout_ms': 1000}))
     assert result['foto'] == 'Sin verificar'
 

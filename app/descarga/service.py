@@ -9,6 +9,7 @@ from app.core.models import RunContext
 from app.core.dates import seller_date_range
 from app.core.state import StateDB
 from app.core.utils import sha256_file
+from app.core.async_utils import ordered_map
 from .auth import ensure_authenticated, extract_csrf_token, navigate_to_guide_search
 from .epresis_api import EpresisAPI, NoDataDetected, SellerResult, SessionExpired, csv_has_data_rows
 
@@ -38,9 +39,15 @@ async def _run_once(cfg: dict, run: RunContext, state: StateDB, logger, visible:
             api = EpresisAPI(context.request, settings, "", logger.getChild("EPRESIS"), referer=page.url or settings["base_url"])
             cache = state.client_cache_dict()
             resolved: list[tuple[dict, int, str]] = []
-            for scfg in sellers:
+            async def resolve(scfg):
+                return await api.resolve_client(scfg, cache)
+
+            clients = await ordered_map(sellers, resolve, concurrency=3)
+            for scfg, client in zip(sellers, clients):
                 seller = scfg["seller"]
-                cid, empresa = await api.resolve_client(scfg, cache)
+                if isinstance(client, Exception):
+                    raise client
+                cid, empresa = client
                 state.save_client(seller, cid, empresa)
                 resolved.append((scfg, cid, empresa))
                 logger.info("[EPRESIS] Cliente %-28s -> %s (%s)", seller, cid, empresa)
@@ -79,8 +86,6 @@ async def _run_once(cfg: dict, run: RunContext, state: StateDB, logger, visible:
                     logger.error("[EPRESIS] ERROR programando %s: %s", seller, exc)
                     return None
 
-            scheduled = await asyncio.gather(*(schedule(*item) for item in resolved))
-
             async def finish(item, initial):
                 scfg, cid, empresa = item
                 seller = scfg["seller"]
@@ -113,7 +118,12 @@ async def _run_once(cfg: dict, run: RunContext, state: StateDB, logger, visible:
                     results[seller].error = str(exc)
                     logger.error("[EPRESIS] ERROR finalizando %s: %s", seller, exc)
 
-            await asyncio.gather(*(finish(item, initial) for item, initial in zip(resolved, scheduled)))
+            async def download_one(item):
+                # A ready export can download while later sellers are scheduled.
+                # EpresisAPI still serializes export calls and respects HTTP 429.
+                await finish(item, await schedule(*item))
+
+            await asyncio.gather(*(download_one(item) for item in resolved))
             return results
         finally:
             await context.close()

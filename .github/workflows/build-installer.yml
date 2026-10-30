@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - 'desktop.py'
+      - 'ABRIR_SMARTPOST.*'
       - 'packaging/**'
       - 'requirements.txt'
       - 'requirements-web.txt'

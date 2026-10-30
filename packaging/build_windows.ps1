@@ -1,6 +1,6 @@
 param(
     [string]$PythonExecutable = "python",
-    [string]$Version = "2.9.7"
+    [string]$Version = "3.0.0"
 )
 $ErrorActionPreference = "Stop"
 $Root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path

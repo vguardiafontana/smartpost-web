@@ -1,6 +1,6 @@
 #define MyAppName "SmartPost"
 #ifndef MyAppVersion
-  #define MyAppVersion "2.9.7"
+  #define MyAppVersion "3.0.0"
 #endif
 #define MyAppPublisher "SmartPost"
 #define MyAppExeName "SmartPost.exe"
@@ -32,8 +32,8 @@ Source: "..\dist\SmartPost\*"; DestDir: "{app}"; Flags: ignoreversion recursesub
 Source: "..\docs\INSTRUCTIVO_USUARIO.pdf"; DestDir: "{app}\docs"; Flags: ignoreversion
 
 [Icons]
-Name: "{autoprograms}\SmartPost"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\{#MyAppExeName}"
-Name: "{autodesktop}\SmartPost"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\{#MyAppExeName}"
+Name: "{autoprograms}\SmartPost"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\{#MyAppExeName}"; AppUserModelID: "SmartPost.Desktop"
+Name: "{autodesktop}\SmartPost"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\{#MyAppExeName}"; AppUserModelID: "SmartPost.Desktop"
 Name: "{autoprograms}\SmartPost - Guía rápida"; Filename: "{app}\docs\INSTRUCTIVO_USUARIO.pdf"
 
 [Run]

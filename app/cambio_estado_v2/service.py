@@ -469,6 +469,32 @@ async def _enable_rendition(context, base: str, csrf: str, referer: str, timeout
     raise RuntimeError(f"Epresis no pudo habilitar la rendición: {data}")
 
 
+async def _prefetch_distributors(context, api, items, base, csrf, referer, timeout_ms, concurrency=3):
+    """Read-only preparation; exact profile codes avoid loading each guide page.
+
+    One official lookup per distinct code, scoped to this batch. Planilla
+    membership and the confirmation audit still run for every selected guide.
+    """
+    async def read(item):
+        return await _filter_guide(api, str(item['retiro_id'])) or {}
+
+    rows = await ordered_map(items, read, concurrency)
+    hints = [_row_distributor_hint(row) if isinstance(row, dict) else {} for row in rows]
+    queries = {}
+    for hint in hints:
+        if hint.get('code'):
+            queries.setdefault(hint['code'], hint)
+
+    async def lookup(code):
+        hint = queries[code]
+        return await _combo_distributor(context, base, csrf, referer, code, timeout_ms,
+                                        expected_name=hint.get('name', ''), expected_code=code)
+
+    matches = await ordered_map(list(queries), lookup, concurrency)
+    exact = dict(zip(queries, matches))
+    return [(row, hint, exact.get(hint.get('code'), {})) for row, hint in zip(rows, hints)]
+
+
 async def change_state_v2(cfg: dict, identifiers: list[str], state_id: int, logger, selected_date=None) -> list[dict[str, Any]]:
     """Cambio de estado por Rendición de Chofer, agrupado por planilla.
 
@@ -575,11 +601,16 @@ async def change_state_v2(cfg: dict, identifiers: list[str], state_id: int, logg
             # real en su mensaje de error al confirmar contra otra planilla.
             by_distributor: dict[str, list[dict[str, Any]]] = defaultdict(list)
             route_probe_items: list[dict[str, Any]] = []
-            for item in resolved:
+            prepared = await _prefetch_distributors(context, api, resolved, base, csrf, arrival_url, timeout_ms)
+            for item, (row, hint, exact) in zip(resolved, prepared):
                 rid = int(item["retiro_id"])
                 try:
-                    dist = await _extract_distributor_from_guide_show(page, base, rid, timeout_ms)
-                    row = None
+                    if isinstance(row, Exception):
+                        raise row
+                    if isinstance(exact, Exception):
+                        raise exact
+                    fast_match = exact and exact.get('id') and _dist_code(exact.get('code')) == _dist_code(hint.get('code'))
+                    dist = dict(exact) if fast_match else await _extract_distributor_from_guide_show(page, base, rid, timeout_ms)
                     if not dist.get("id"):
                         # Algunas guías muestran el distribuidor como texto/select y no como enlace.
                         labeled_dist = await _extract_distributor_labeled_from_show(page)
@@ -589,10 +620,10 @@ async def change_state_v2(cfg: dict, identifiers: list[str], state_id: int, logg
                     # Leemos también la estructura de la guía aunque el show tenga link: el `codigo`
                     # visible/estructurado (ej. 37424493APP) es la fuente autoritativa para distinguir
                     # perfiles duplicados de la misma persona.
-                    row = await _filter_guide(api, str(rid)) or {}
-                    hint = _row_distributor_hint(row)
                     guide_code = hint.get("code") or dist.get("code") or ""
-                    if guide_code:
+                    if guide_code and exact:
+                        dist = {**dist, **exact}
+                    if guide_code and not exact:
                         exact = await _combo_distributor(
                             context, base, csrf, arrival_url, guide_code, timeout_ms,
                             expected_name=hint.get("name") or dist.get("name", ""), expected_code=guide_code,

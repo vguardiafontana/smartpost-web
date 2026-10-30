@@ -88,7 +88,7 @@ class BusquedaGuiasPage(QWidget):
             "y muestra todos los resultados en una tabla."
         )
         help_text.setWordWrap(True)
-        help_text.setStyleSheet("color:#5b6472;")
+        help_text.setStyleSheet("color:#a5a7ba;")
         root.addWidget(help_text)
 
         self.input = QTextEdit()
@@ -101,7 +101,7 @@ class BusquedaGuiasPage(QWidget):
         self.search_btn.setMinimumHeight(40)
         self.search_btn.clicked.connect(self._search)
         self.summary = QLabel("Listo para buscar.")
-        self.summary.setStyleSheet("color:#5b6472;")
+        self.summary.setStyleSheet("color:#a5a7ba;")
         controls.addWidget(self.search_btn)
         controls.addWidget(self.summary)
         controls.addStretch(1)
@@ -122,13 +122,6 @@ class BusquedaGuiasPage(QWidget):
         header.setSectionResizeMode(QHeaderView.Interactive)
         for i, (_, _, width) in enumerate(self.COLUMNS):
             self.table.setColumnWidth(i, width)
-        self.table.setStyleSheet(
-            "QTableWidget{background:#d9dde2;color:#111111;gridline-color:#bcc2c9;alternate-background-color:#e4e7eb;}"
-            "QTableWidget::item{padding:5px;color:#111111;background:#d9dde2;}"
-            "QTableWidget::item:alternate{background:#e4e7eb;}"
-            "QTableWidget::item:selected{background:#9fb9d6;color:#000000;}"
-            "QHeaderView::section{background:#c7ccd2;color:#111111;font-weight:700;padding:7px;border:0;border-right:1px solid #aeb5bd;border-bottom:1px solid #aeb5bd;}"
-        )
         root.addWidget(self.table, 1)
 
     def _set_busy(self, busy: bool):
@@ -206,14 +199,14 @@ class BusquedaGuiasPage(QWidget):
                         link = QLabel(f'<a href="{html.escape(dist_url, quote=True)}">{html.escape(str(value))}</a>')
                         link.setTextInteractionFlags(Qt.TextBrowserInteraction)
                         link.setOpenExternalLinks(False)
-                        link.setStyleSheet("QLabel{background:transparent;color:#111111;padding:4px;} QLabel a{color:#0b57d0;}")
+                        link.setStyleSheet("QLabel{background:transparent;color:#f1f0fa;padding:4px;} QLabel a{color:#c5b6ff;}")
                         link.setToolTip(dist_url)
                         link.linkActivated.connect(self._open_in_chrome)
                         self.table.setCellWidget(r, c, link)
                     continue
                 else:
                     value = row.get(key, "")
-                item = QTableWidgetItem(str(value or "—"))
+                item = QTableWidgetItem(str(value if value is not None and value != '' else "—"))
                 item.setToolTip(str(value or ""))
                 item.setTextAlignment(Qt.AlignVCenter | Qt.AlignLeft)
                 self.table.setItem(r, c, item)

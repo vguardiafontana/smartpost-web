@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#0f172a">
+  <meta name="theme-color" content="#1d1f2b">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="SmartPost">
@@ -13,9 +13,25 @@
   <title>SmartPost</title>
 </head>
 <body>
-  <main class="shell">
+  <a href="#mainContent" class="skip-link">Ir al contenido</a>
+  <aside id="workspaceNav" class="workspace-nav hidden" aria-label="Navegación principal">
+    <div class="violet-rail"><span class="monogram" aria-hidden="true">S</span><span class="rail-mark" aria-hidden="true">⌂</span><span class="rail-bottom">SP</span></div>
+    <div class="nav-panel">
+      <div class="nav-brand">SmartPost<span>TU ESPACIO DE TRABAJO</span></div>
+      <div class="nav-caption">OPERACIONES</div>
+      <nav class="nav-links">
+        <button data-step="homeStep" class="nav-button active"><span aria-hidden="true">⌂</span><span>Inicio</span></button>
+        <button data-step="composeStep" class="nav-button"><span aria-hidden="true">↗</span><span>Cambio de estado</span></button>
+        <button data-step="searchStep" class="nav-button"><span aria-hidden="true">⌕</span><span>Búsqueda de guías</span></button>
+        <button data-step="reportsStep" class="nav-button"><span aria-hidden="true">▤</span><span>Reportes y Visitas</span></button>
+        <button data-step="visitPhotosStep" class="nav-button"><span aria-hidden="true">▧</span><span>Visitas sin foto</span></button>
+      </nav>
+      <div class="nav-footer"><span class="connection-dot"></span> Acceso privado<span class="nav-footnote">SMARTPOST WEB</span></div>
+    </div>
+  </aside>
+  <main id="mainContent" class="shell">
     <header class="topbar">
-      <div><div class="eyebrow">SMARTPOST WEB</div><h1 id="pageTitle">SmartPost</h1></div>
+      <div><div class="eyebrow">OPERACIONES / SMARTPOST</div><h1 id="pageTitle">SmartPost</h1></div>
       <button id="logoutBtn" class="ghost hidden">Salir</button>
     </header>
 
@@ -23,6 +39,7 @@
       <h2>Ingresar</h2>
       <p class="muted">Acceso privado. Ingresá tu PIN.</p>
       <form id="loginForm">
+        <label for="pinInput">PIN de acceso</label>
         <input id="pinInput" inputmode="numeric" autocomplete="one-time-code" type="password" maxlength="64" placeholder="PIN" required>
         <button class="primary full" type="submit">Entrar</button>
       </form>
@@ -31,27 +48,30 @@
 
     <section id="appView" class="hidden">
       <div id="homeStep" class="stack">
-        <section class="card">
-          <div class="eyebrow">MÓDULOS</div>
-          <h2>¿Qué querés hacer?</h2>
-          <div class="module-grid">
-            <button id="openV2Btn" class="module-btn"><strong>Cambio de estado v2</strong><span>Rendición de choferes</span></button>
-            <button id="openSearchBtn" class="module-btn"><strong>Búsqueda de guías</strong><span>Guías, remitos y guía agente</span></button>
-            <button id="openReportsBtn" class="module-btn"><strong>Reportes y Visitas</strong><span>Generar y descargar archivos</span></button>
-            <button id="openVisitPhotosBtn" class="module-btn"><strong>Visitas sin foto</strong><span>Visitas de hoy, con o sin foto</span></button>
-          </div>
+        <section class="welcome-card">
+          <div class="eyebrow">PANEL GENERAL</div>
+          <h2>Tu operación,<br><span>más simple.</span></h2>
+          <p>Consultá envíos, generá reportes y gestioná tus pedidos desde un mismo espacio.</p>
+          <div class="welcome-note"><span class="connection-dot"></span> Tus procesos siguen trabajando aunque bloquees el celular.</div>
         </section>
+        <div class="section-label"><span>TUS HERRAMIENTAS</span><span>04 MÓDULOS</span></div>
+        <div class="module-grid">
+          <button id="openV2Btn" class="module-btn"><span class="module-number">01 / GESTIÓN <span aria-hidden="true">↗</span></span><strong>Cambio de estado v2</strong><span>Actualizá pedidos por rendición de choferes.</span><span class="module-open">Abrir módulo <span aria-hidden="true">→</span></span></button>
+          <button id="openSearchBtn" class="module-btn"><span class="module-number">02 / CONSULTAS <span aria-hidden="true">⌕</span></span><strong>Búsqueda de guías</strong><span>Encontrá envíos por guía, remito o guía agente.</span><span class="module-open">Abrir módulo <span aria-hidden="true">→</span></span></button>
+          <button id="openReportsBtn" class="module-btn"><span class="module-number">03 / ARCHIVOS <span aria-hidden="true">▤</span></span><strong>Reportes y Visitas</strong><span>Generá Excel y copiá los mensajes por seller.</span><span class="module-open">Abrir módulo <span aria-hidden="true">→</span></span></button>
+          <button id="openVisitPhotosBtn" class="module-btn"><span class="module-number">04 / SEGUIMIENTO <span aria-hidden="true">▧</span></span><strong>Visitas sin foto</strong><span>Revisá las fotos pendientes en cada visita.</span><span class="module-open">Abrir módulo <span aria-hidden="true">→</span></span></button>
+        </div>
       </div>
 
       <div id="visitPhotosStep" class="stack hidden">
         <button class="back-link" data-home>← Inicio</button>
         <section class="card">
           <h2>Visitas sin foto</h2>
-          <p class="muted">Pedidos ingresados hoy a planta · Primera, segunda y tercera visita y reprogramación.</p>
-          <label>Visitas con foto</label>
+          <p class="muted">Pedidos ingresados hoy a planta. Cada visita necesita su foto: 2.ª visita, al menos 2 fotos; 3.ª visita, al menos 3.</p>
+          <label>Fotos completas para la visita actual</label>
           <div class="row-actions visit-photo-choice" role="group" aria-label="Visitas con foto">
-            <button id="visitPhotoYes" class="secondary" aria-pressed="false">Sí</button>
-            <button id="visitPhotoNo" class="primary" aria-pressed="true">No</button>
+            <button id="visitPhotoYes" class="secondary" aria-pressed="false">Completas</button>
+            <button id="visitPhotoNo" class="primary" aria-pressed="true">Pendientes</button>
           </div>
           <button id="queryVisitPhotos" class="primary full">Consultar visitas de hoy</button>
           <p id="visitPhotosProgress" class="muted" role="status" aria-live="polite"></p>

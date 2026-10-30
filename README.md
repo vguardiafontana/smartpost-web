@@ -1,4 +1,4 @@
-> Versión web actual: v2.9.6
+> Versión actual: v3.0.0 — Desktop y Web
 
 ## Descargar SmartPost Desktop
 

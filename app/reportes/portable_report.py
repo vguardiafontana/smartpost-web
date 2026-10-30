@@ -118,7 +118,9 @@ def write_report_portable(template_path: Path, output_path: Path, rows: list[dic
     style_cache = {}
 
     # BASE: clear old values while retaining formatting and grow rows from row 2.
-    for r in range(2, max(base.max_row, n + 1) + 1):
+    # New rows are empty and receive every value below. Clear only old rows;
+    # walking the new rows here would allocate/touch each cell twice.
+    for r in range(2, base.max_row + 1):
         for c in range(1, len(EXPECTED_HEADERS) + 1):
             base.cell(r, c).value = None
     template_base_style_row = 2

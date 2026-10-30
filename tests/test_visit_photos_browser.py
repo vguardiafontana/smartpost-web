@@ -65,7 +65,7 @@ def test_photo_evidence_and_mobile_yes_no_controls():
             assert await page.evaluate('(row)=>guideTSV([row])', job['rows'][1]) == expected
             await page.evaluate("Object.defineProperty(navigator,'clipboard',{value:{writeText:async text=>{window.copied=text}}})")
             await page.locator('#visitPhotosRows [data-guide-action="copy"]').click()
-            assert await page.evaluate('window.copied') == expected
+            assert await page.evaluate('window.copied') == expected + '\t—\t—'
             await page.locator('#visitPhotoYes').click()
             assert await page.locator('#visitPhotosRows tbody tr td:first-child').all_text_contents() == ['10001']
             await page.locator('#visitPhotoNo').click()

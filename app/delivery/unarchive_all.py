@@ -130,7 +130,7 @@ async def _ready_rows(page, pane):
                 titles = await pane.locator('span[title]').evaluate_all("els => els.filter(el => el.getBoundingClientRect().height>0).map(el => el.getAttribute('title'))")
                 if any(title and not _ARCHIVED_RE.fullmatch(title) for title in titles):
                     raise RuntimeError("Hay chats visibles, pero no pude reconocer sus filas en Archivados. No se informó la lista como vacía.")
-                return []
+                raise RuntimeError("No pude confirmar que Archivados esté vacío. No se cambió a archivar automáticamente.")
         await page.wait_for_timeout(150)
     raise RuntimeError("Archivados sigue cargando. No se dio la lista por vacía.")
 

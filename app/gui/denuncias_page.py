@@ -58,7 +58,7 @@ class DenunciasPage(QWidget):
             "Pegá todos los números que tengas. Pueden ser N° de guía SmartPost, Remito o Guía Agente. "
             "No hace falta indicar cuál es cuál ni cargar el seller: SmartPost los busca en Epresis automáticamente."
         )
-        hint.setWordWrap(True); hint.setStyleSheet("color:#5b6472;")
+        hint.setWordWrap(True); hint.setStyleSheet("color:#a5a7ba;")
         root.addWidget(hint)
 
         input_box = QGroupBox("Pedidos siniestrados")

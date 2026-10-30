@@ -844,32 +844,40 @@ async def _unarchive_from_archived(page: Page, archived: Locator, logger) -> dic
     return {"mode": "unarchive", "count": count, "list": "Archivados"}
 
 
-async def _toggle_once(context, cfg: dict, logger, mode="auto") -> dict:
+async def _toggle_once(context, cfg: dict, logger, mode="auto", decision=None) -> dict:
     wa_cfg = cfg.get("whatsapp") or {}
     list_name = str(wa_cfg.get("company_chat_list") or "Smart Post").strip() or "Smart Post"
     page = context.pages[0] if context.pages else await context.new_page()
     page = await _ensure_live_page(context, page)
     await _open_home(page)
 
+    decision = decision if decision is not None else {}
+    mode = decision.get('mode', mode)
     if mode == "unarchive":
         from app.delivery.unarchive_all import unarchive_all
         logger.info("[WHATSAPP CHATS] Desarchivar todos los chats de Archivados…")
         return await unarchive_all(page, logger)
 
-    archived = await _find_archived_entry(page)
     if mode == "archive":
         return await _archive_from_company_list(page, list_name, logger)
+    archived = await _find_archived_entry(page)
     if archived is not None:
         try:
-            result = await _unarchive_from_archived(page, archived, logger)
-            if result["mode"] == "unarchive":
+            from app.delivery.unarchive_all import unarchive_all
+            # Keep the direction on recovery: a partially completed unarchive
+            # must never turn into archiving the same chats again.
+            decision['mode'] = 'unarchive'
+            result = await unarchive_all(page, logger)
+            if result["count"] > 0:
                 return result
             logger.info("[WHATSAPP CHATS] Archivados está vacío. Los chats están desarchivados.")
+            decision['mode'] = 'archive'
             return await _archive_from_company_list(page, list_name, logger)
         except Exception as exc:
             raise RuntimeError(f"No pude desarchivar los chats: {exc}") from exc
 
     logger.info("[WHATSAPP CHATS] No hay entrada Archivados. Los chats están desarchivados.")
+    decision['mode'] = 'archive'
     return await _archive_from_company_list(page, list_name, logger)
 
 
@@ -889,6 +897,7 @@ async def toggle_company_chats(cfg: dict, logger, mode="auto") -> dict:
     async with async_playwright() as p:
         browser_type = getattr(p, str(wa_cfg.get("browser") or "chromium"))
         last_exc = None
+        decision = {}
         for attempt in (1, 2):
             context = await browser_type.launch_persistent_context(
                 user_data_dir=str(profile), headless=False, viewport={"width": 1365, "height": 900}
@@ -896,7 +905,7 @@ async def toggle_company_chats(cfg: dict, logger, mode="auto") -> dict:
             try:
                 if attempt == 2:
                     logger.warning("[WHATSAPP CHATS] WhatsApp cerró la pestaña/contexto. Reabriendo sesión y reintentando una vez…")
-                return await _toggle_once(context, cfg, logger, mode=mode)
+                return await _toggle_once(context, cfg, logger, mode=mode, decision=decision)
             except Exception as exc:
                 last_exc = exc
                 if not _is_target_closed_error(exc) or attempt == 2:

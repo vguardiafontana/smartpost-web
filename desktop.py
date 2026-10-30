@@ -14,6 +14,10 @@ def main() -> int:
     ensure_data_dirs()
     ensure_user_config()
 
+    if sys.platform == 'win32':
+        import ctypes
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID('SmartPost.Desktop')
+
     from PySide6.QtGui import QIcon
     from PySide6.QtWidgets import QApplication
     from app.gui.main_window import MainWindow

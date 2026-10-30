@@ -35,8 +35,12 @@ def run_self_test(report_path: str) -> int:
             app = QApplication.instance() or QApplication([])
             window = MainWindow()
             app.processEvents()
-            assert window.unarchive_btn.text()
-            assert window.cambio_estado_v2_page.date_edit.calendarPopup()
+            assert window.archive_toggle_btn.text() == 'Archivar / desarchivar'
+            assert not hasattr(window, 'cambio_estado_v2_page')
+            assert window.stack.count() == 5
+            assert not window.windowIcon().isNull()
+            assert resource_path('assets/fonts/InterVariable.ttf').is_file()
+            assert resource_path('assets/icons/home.svg').is_file()
             assert callable(unarchive_all)
             window.close()
             app.processEvents()

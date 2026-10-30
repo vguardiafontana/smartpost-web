@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from PySide6.QtCore import Qt, QDate, QThread, QTimer, QUrl
+from PySide6.QtCore import Qt, QDate, QThread, QTimer, QUrl, QSize
 from PySide6.QtGui import QColor, QBrush, QDesktopServices, QIcon
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QDateEdit,
     QPushButton, QTextEdit, QProgressBar, QGroupBox, QGridLayout,
     QTableWidget, QTableWidgetItem, QHeaderView, QMessageBox, QStackedWidget,
-    QFrame, QSizePolicy
+    QFrame, QSizePolicy, QScrollArea, QApplication
 )
 
 from app.core.config import load_config, resolve_path
@@ -19,8 +19,6 @@ from app.gui.settings_dialog import SettingsDialog
 from app.gui.setup_wizard import InitialSetupWizard
 from app.gui.workers import PipelineWorker, WhatsAppLoginWorker, WhatsAppArchiveToggleWorker
 from app.gui.denuncias_page import DenunciasPage
-from app.gui.cambio_estado_page import CambioEstadoPage
-from app.gui.cambio_estado_v2_page import CambioEstadoV2Page
 from app.gui.busqueda_guias_page import BusquedaGuiasPage
 from app.gui.visitas_fotos_page import VisitasFotosPage
 
@@ -28,10 +26,12 @@ from app.gui.visitas_fotos_page import VisitasFotosPage
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
+        from app.gui.theme import apply_theme
+        apply_theme(QApplication.instance())
         self.setWindowTitle("SmartPost")
         # Arranque cómodo, pero la ventana queda completamente redimensionable.
         # El mínimo es deliberadamente bajo; las páginas extensas usan scroll.
-        self.resize(1050, 720)
+        self.resize(1240, 820)
         self.setMinimumSize(720, 520)
         icon = resource_path("assets/smartpost.ico")
         if icon.exists():
@@ -45,79 +45,103 @@ class MainWindow(QMainWindow):
 
     def _build_ui(self):
         central = QWidget(); self.setCentralWidget(central)
-        root = QVBoxLayout(central); root.setContentsMargins(20, 16, 20, 16); root.setSpacing(12)
-
+        outer = QHBoxLayout(central); outer.setContentsMargins(0, 0, 0, 0); outer.setSpacing(0)
+        rail = QFrame(); rail.setObjectName("rail"); rail.setFixedWidth(58)
+        rail_layout = QVBoxLayout(rail); rail_layout.setContentsMargins(6, 18, 6, 16)
+        monogram = QLabel("S"); monogram.setAlignment(Qt.AlignCenter)
+        monogram.setStyleSheet("font-size:26px;font-weight:800;color:white;")
+        rail_layout.addWidget(monogram); rail_layout.addSpacing(26)
+        home = QPushButton(); home.setIcon(QIcon(str(resource_path('assets/icons/home.svg')))); home.setIconSize(QSize(22, 22)); home.setObjectName("railButton"); home.setToolTip("Inicio"); home.setAccessibleName("Inicio")
+        home.clicked.connect(lambda: self.stack.setCurrentWidget(self.home_page)); rail_layout.addWidget(home)
+        rail_layout.addStretch()
+        settings = QPushButton(); settings.setIcon(QIcon(str(resource_path('assets/icons/settings.svg')))); settings.setIconSize(QSize(22, 22)); settings.setObjectName("railButton"); settings.setToolTip("Configuración"); settings.setAccessibleName("Configuración")
+        settings.clicked.connect(self._settings); rail_layout.addWidget(settings)
+        outer.addWidget(rail)
+        sidebar = QFrame(); sidebar.setObjectName("sidebar"); sidebar.setFixedWidth(190)
+        side = QVBoxLayout(sidebar); side.setContentsMargins(16, 24, 16, 18); side.setSpacing(8)
+        brand = QLabel("SmartPost"); brand.setObjectName("sidebarBrand"); side.addWidget(brand)
+        label = QLabel("TU ESPACIO DE TRABAJO"); label.setObjectName("eyebrow"); side.addWidget(label)
+        side.addSpacing(28)
+        self.nav_buttons = {}
+        for key, text in (("home_page", "Inicio"), ("reports_page", "Reportes y Visitas"),
+                          ("denuncias_page", "Denuncias"), ("busqueda_guias_page", "Búsqueda de guías"),
+                          ("visitas_fotos_page", "Visitas sin foto")):
+            button = QPushButton(text); button.setObjectName("navButton"); button.setCheckable(True)
+            button.clicked.connect(lambda checked=False, key=key: self._navigate(key))
+            self.nav_buttons[key] = button; side.addWidget(button)
+        side.addStretch()
+        foot = QLabel("DESKTOP\nTodo en un solo lugar"); foot.setStyleSheet("color:#a5a7ba;font-size:11px;")
+        side.addWidget(foot); outer.addWidget(sidebar)
+        workspace = QWidget(); workspace.setObjectName("workspace")
+        root = QVBoxLayout(workspace); root.setContentsMargins(24, 20, 24, 16); root.setSpacing(20)
+        outer.addWidget(workspace, 1)
         header = QHBoxLayout()
-        brand = QLabel("SmartPost"); brand.setStyleSheet("font-size:26px;font-weight:800;")
-        header.addWidget(brand); header.addStretch(1)
+        caption = QLabel("OPERACIONES / SMARTPOST"); caption.setObjectName("eyebrow"); header.addWidget(caption)
+        header.addStretch(1)
         self.settings_btn = QPushButton("Configuración"); self.settings_btn.clicked.connect(self._settings)
         self.login_btn = QPushButton("Vincular WhatsApp"); self.login_btn.clicked.connect(self._login_whatsapp)
-        header.addWidget(self.login_btn); header.addWidget(self.settings_btn)
-        root.addLayout(header)
+        header.addWidget(self.login_btn); header.addWidget(self.settings_btn); root.addLayout(header)
 
         self.stack = QStackedWidget(); root.addWidget(self.stack, 1)
         self.home_page = self._build_home_page(); self.stack.addWidget(self.home_page)
         self.reports_page = self._build_reports_page(); self.stack.addWidget(self.reports_page)
         self.denuncias_page = DenunciasPage(); self.denuncias_page.back_requested.connect(lambda: self.stack.setCurrentWidget(self.home_page))
         self.stack.addWidget(self.denuncias_page)
-        self.cambio_estado_page = CambioEstadoPage(); self.cambio_estado_page.back_requested.connect(lambda: self.stack.setCurrentWidget(self.home_page))
-        self.stack.addWidget(self.cambio_estado_page)
-        self.cambio_estado_v2_page = CambioEstadoV2Page(); self.cambio_estado_v2_page.back_requested.connect(lambda: self.stack.setCurrentWidget(self.home_page))
-        self.stack.addWidget(self.cambio_estado_v2_page)
         self.busqueda_guias_page = BusquedaGuiasPage(); self.busqueda_guias_page.back_requested.connect(lambda: self.stack.setCurrentWidget(self.home_page))
         self.stack.addWidget(self.busqueda_guias_page)
         self.visitas_fotos_page = VisitasFotosPage()
         self.visitas_fotos_page.back_requested.connect(lambda: self.stack.setCurrentWidget(self.home_page))
         self.stack.addWidget(self.visitas_fotos_page)
+        self.stack.currentChanged.connect(self._sync_navigation)
+        self._sync_navigation()
         self.statusBar().showMessage("Listo")
         self._load_sellers_table()
 
+    def _navigate(self, name):
+        self.stack.setCurrentWidget(getattr(self, name))
+        self._sync_navigation()
+
+    def _sync_navigation(self, *_):
+        for name, button in self.nav_buttons.items():
+            button.setChecked(self.stack.currentWidget() is getattr(self, name, None))
+
     def _build_home_page(self):
-        page = QWidget(); layout = QVBoxLayout(page); layout.setContentsMargins(40,40,40,40); layout.setSpacing(20)
-        title = QLabel("¿Qué querés hacer?"); title.setStyleSheet("font-size:28px;font-weight:800;")
-        sub = QLabel("SmartPost queda organizado por funciones. Podés seguir agregando módulos sin mezclar los flujos.")
-        sub.setStyleSheet("color:#5b6472;font-size:14px;"); sub.setWordWrap(True)
-        layout.addWidget(title); layout.addWidget(sub)
-
-        side_tools = QHBoxLayout()
-        side_tools.addStretch(1)
-        self.archive_toggle_btn = QPushButton("Archivar Smart Post")
-        self.archive_toggle_btn.setToolTip("Archiva los chats de la lista Smart Post y verifica cada cambio.")
-        self.archive_toggle_btn.setMaximumWidth(180)
-        self.archive_toggle_btn.clicked.connect(lambda: self._toggle_whatsapp_archive("archive"))
-        side_tools.addWidget(self.archive_toggle_btn)
-        self.unarchive_btn = QPushButton("Desarchivar chats")
-        self.unarchive_btn.setToolTip("Desarchiva todos los chats de Archivados y verifica cada cambio.")
-        self.unarchive_btn.clicked.connect(lambda: self._toggle_whatsapp_archive("unarchive"))
-        side_tools.addWidget(self.unarchive_btn)
-        layout.addLayout(side_tools)
-
-        cards = QGridLayout(); cards.setHorizontalSpacing(18); cards.setVerticalSpacing(18)
-        report = self._module_card("Reportes y Visitas", "Descarga desde Epresis, genera los Excel y los envía a los grupos configurados.", "Abrir")
-        report.findChild(QPushButton).clicked.connect(lambda: self.stack.setCurrentWidget(self.reports_page))
-        denuncia = self._module_card("Denuncias", "Busca los envíos y el chofer, prepara la denuncia oficial y distribuye el PDF por WhatsApp.", "Abrir")
-        denuncia.findChild(QPushButton).clicked.connect(lambda: self.stack.setCurrentWidget(self.denuncias_page))
-        cambio = self._module_card("Cambio de estado", "Flujo anterior por Arribo de Paquetes.", "Abrir")
-        cambio.findChild(QPushButton).clicked.connect(lambda: self.stack.setCurrentWidget(self.cambio_estado_page))
-        cambio_v2 = self._module_card("Cambio de estado v2", "Nuevo flujo por Rendición de Chofer: busca planilla, agrupa por chofer y confirma en lote.", "Abrir")
-        cambio_v2.findChild(QPushButton).clicked.connect(lambda: self.stack.setCurrentWidget(self.cambio_estado_v2_page))
-        busqueda = self._module_card("Búsqueda de guías", "Pegá varias guías, remitos o Guías Agente y consultá todos sus datos y el distribuidor.", "Abrir")
-        busqueda.findChild(QPushButton).clicked.connect(lambda: self.stack.setCurrentWidget(self.busqueda_guias_page))
-        cards.addWidget(report,0,0); cards.addWidget(denuncia,0,1); cards.addWidget(cambio,1,0); cards.addWidget(cambio_v2,1,1); cards.addWidget(busqueda,2,0)
-        fotos = self._module_card("Visitas sin foto", "Consultá las visitas de hoy con o sin foto cargada.", "Abrir")
-        fotos.findChild(QPushButton).clicked.connect(lambda: self.stack.setCurrentWidget(self.visitas_fotos_page))
-        cards.addWidget(fotos,2,1)
-        cards.setColumnStretch(0,1); cards.setColumnStretch(1,1)
+        scroll = QScrollArea(); scroll.setWidgetResizable(True)
+        page = QWidget(); scroll.setWidget(page)
+        layout = QVBoxLayout(page); layout.setContentsMargins(0, 8, 0, 8); layout.setSpacing(22)
+        label = QLabel("PANEL GENERAL"); label.setObjectName("eyebrow"); layout.addWidget(label)
+        title = QLabel("Tu operación, más simple."); title.setStyleSheet("font-size:28px;font-weight:800;")
+        title.setWordWrap(True); layout.addWidget(title)
+        sub = QLabel("Consultá envíos, prepará reportes y gestioná tus chats desde un mismo espacio.")
+        sub.setStyleSheet("color:#a5a7ba;font-size:14px;"); sub.setWordWrap(True); layout.addWidget(sub)
+        tools = QHBoxLayout()
+        self.archive_toggle_btn = QPushButton("Archivar / desarchivar")
+        self.archive_toggle_btn.setProperty("primary", True)
+        self.archive_toggle_btn.setToolTip("Si hay chats en Archivados, desarchiva todos. Si está vacío, archiva la lista Smart Post.")
+        self.archive_toggle_btn.clicked.connect(lambda: self._toggle_whatsapp_archive("auto"))
+        tools.addWidget(self.archive_toggle_btn); tools.addStretch(); layout.addLayout(tools)
+        cards = QGridLayout(); cards.setHorizontalSpacing(16); cards.setVerticalSpacing(16)
+        modules = (
+            ("01", "Reportes y Visitas", "Descargá los Excel de Epresis y enviá los reportes a tus grupos.", "reports_page"),
+            ("02", "Denuncias", "Prepará denuncias, consultá los PDF descargados y copiá los mensajes por seller.", "denuncias_page"),
+            ("03", "Búsqueda de guías", "Encontrá envíos por guía, remito o guía agente y consultá sus datos.", "busqueda_guias_page"),
+            ("04", "Visitas sin foto", "Detectá fotos pendientes según la cantidad de visitas de cada envío.", "visitas_fotos_page"),
+        )
+        for index, (number, title, body, target) in enumerate(modules):
+            card = self._module_card(title, body, "Abrir módulo", number)
+            card.findChild(QPushButton).clicked.connect(lambda checked=False, target=target: self.stack.setCurrentWidget(getattr(self, target)))
+            cards.addWidget(card, index // 2, index % 2)
+        cards.setColumnStretch(0, 1); cards.setColumnStretch(1, 1)
         layout.addLayout(cards); layout.addStretch(1)
-        return page
+        return scroll
 
-    def _module_card(self, title_text, body_text, button_text):
-        frame = QFrame(); frame.setFrameShape(QFrame.StyledPanel)
-        frame.setStyleSheet("QFrame{background:white;border:1px solid #dfe3e8;border-radius:10px;} QLabel{border:0;} QPushButton{padding:8px 16px;}")
-        v = QVBoxLayout(frame); v.setContentsMargins(22,22,22,22); v.setSpacing(12)
-        title = QLabel(title_text); title.setStyleSheet("color:#3A3A3A;font-size:20px;font-weight:750;")
-        body = QLabel(body_text); body.setWordWrap(True); body.setStyleSheet("color:#5b6472;")
-        btn = QPushButton(button_text); btn.setMinimumHeight(36)
+    def _module_card(self, title_text, body_text, button_text, number=""):
+        frame = QFrame(); frame.setObjectName("moduleCard")
+        v = QVBoxLayout(frame); v.setContentsMargins(22, 20, 22, 20); v.setSpacing(12)
+        tag = QLabel(number + "  /  MÓDULO"); tag.setObjectName("eyebrow"); v.addWidget(tag)
+        title = QLabel(title_text); title.setWordWrap(True); title.setStyleSheet("font-size:20px;font-weight:700;")
+        body = QLabel(body_text); body.setWordWrap(True); body.setStyleSheet("color:#a5a7ba;")
+        btn = QPushButton(button_text); btn.setMinimumHeight(36); btn.setProperty("primary", True)
         v.addWidget(title); v.addWidget(body); v.addStretch(1); v.addWidget(btn)
         return frame
 
@@ -131,6 +155,7 @@ class MainWindow(QMainWindow):
         self.date = QDateEdit(QDate.currentDate()); self.date.setCalendarPopup(True); self.date.setDisplayFormat("dd-MM-yyyy"); self.date.setMinimumWidth(150)
         controls.addWidget(self.date)
         self.run_btn = QPushButton("Ejecutar"); self.dry_btn = QPushButton("Probar sin enviar"); self.open_reports_btn = QPushButton("Abrir reportes")
+        self.run_btn.setProperty('primary', True)
         self.run_btn.clicked.connect(lambda: self._start_pipeline(False)); self.dry_btn.clicked.connect(lambda: self._start_pipeline(True)); self.open_reports_btn.clicked.connect(self._open_reports)
         for b in (self.run_btn,self.dry_btn,self.open_reports_btn): controls.addWidget(b)
         controls.addStretch(1); root.addLayout(controls)
@@ -138,28 +163,28 @@ class MainWindow(QMainWindow):
         stages = QGroupBox("Progreso"); sg = QGridLayout(stages); self.stage_labels = {}
         for i,(key,label) in enumerate((("epresis","Epresis"),("reportes","Reportes"),("visitas","Visitas"),("whatsapp","WhatsApp"))):
             name=QLabel(label); name.setStyleSheet("font-weight:700;")
-            state=QLabel("Pendiente"); state.setAlignment(Qt.AlignCenter); state.setMinimumWidth(130); state.setStyleSheet("padding:6px;border-radius:6px;background:#eef1f5;color:#5b6472;")
+            state=QLabel("Pendiente"); state.setAlignment(Qt.AlignCenter); state.setMinimumWidth(130); state.setStyleSheet("padding:6px;border-radius:6px;background:#303244;color:#a5a7ba;")
             self.stage_labels[key]=state; sg.addWidget(name,0,i); sg.addWidget(state,1,i)
         self.progress=QProgressBar(); self.progress.setRange(0,100); self.progress.setValue(0); sg.addWidget(self.progress,2,0,1,4); root.addWidget(stages)
 
         body=QHBoxLayout(); logs_box=QGroupBox("Actividad en tiempo real"); lv=QVBoxLayout(logs_box)
         self.logs=QTextEdit(); self.logs.setReadOnly(True); self.logs.setLineWrapMode(QTextEdit.NoWrap); self.logs.setStyleSheet("font-family:Consolas,monospace;font-size:11px;")
-        lv.addWidget(self.logs); body.addWidget(logs_box,3)
+        lv.addWidget(self.logs); body.addWidget(logs_box,2)
         summary_box=QGroupBox("Resumen por seller"); sv=QVBoxLayout(summary_box)
         self.summary=QTableWidget(0,4); self.summary.setHorizontalHeaderLabels(["Seller","Epresis","Reporte","WhatsApp"])
         self.summary.horizontalHeader().setSectionResizeMode(0,QHeaderView.Stretch)
         for c in (1,2,3): self.summary.horizontalHeader().setSectionResizeMode(c,QHeaderView.ResizeToContents)
-        self.summary.verticalHeader().setVisible(False); sv.addWidget(self.summary); body.addWidget(summary_box,2); root.addLayout(body,1)
+        self.summary.verticalHeader().setVisible(False); sv.addWidget(self.summary); body.addWidget(summary_box,3); root.addLayout(body,1)
         return page
 
     def _toggle_whatsapp_archive(self, mode="auto"):
         if self.chat_thread is not None:
             return
         self.archive_toggle_btn.setEnabled(False)
-        self.unarchive_btn.setEnabled(False)
         self.statusBar().showMessage("Abriendo WhatsApp para archivar/desarchivar chats…")
         self.chat_thread = QThread(self)
         self.chat_worker = WhatsAppArchiveToggleWorker(mode)
+        self.chat_worker.log_line.connect(self.statusBar().showMessage)
         self.chat_worker.moveToThread(self.chat_thread)
         self.chat_thread.started.connect(self.chat_worker.run)
         self.chat_worker.finished.connect(self._toggle_whatsapp_archive_finished)
@@ -175,7 +200,6 @@ class MainWindow(QMainWindow):
 
     def _toggle_whatsapp_archive_finished(self, ok: bool, result, detail: str):
         self.archive_toggle_btn.setEnabled(True)
-        self.unarchive_btn.setEnabled(True)
         if not ok:
             self.statusBar().showMessage("Error al archivar/desarchivar chats")
             ErrorDialog(detail, self).exec()
@@ -205,7 +229,7 @@ class MainWindow(QMainWindow):
         for r,s in enumerate(sellers):
             self.summary.setItem(r,0,QTableWidgetItem(str(s["seller"])))
             for c in (1,2,3): self.summary.setItem(r,c,QTableWidgetItem("—"))
-        vr=len(sellers); item=QTableWidgetItem("VISITAS"); item.setBackground(QBrush(QColor("#eef1f5"))); self.summary.setItem(vr,0,item)
+        vr=len(sellers); item=QTableWidgetItem("VISITAS"); item.setBackground(QBrush(QColor("#303244"))); self.summary.setItem(vr,0,item)
         for c in (1,2,3): self.summary.setItem(vr,c,QTableWidgetItem("—"))
 
     def _set_busy(self,busy:bool):
@@ -214,15 +238,15 @@ class MainWindow(QMainWindow):
 
     def _reset_stages(self):
         for label in self.stage_labels.values():
-            label.setText("Pendiente"); label.setStyleSheet("padding:6px;border-radius:6px;background:#eef1f5;color:#5b6472;")
+            label.setText("Pendiente"); label.setStyleSheet("padding:6px;border-radius:6px;background:#303244;color:#a5a7ba;")
         self.progress.setValue(0); self._load_sellers_table()
 
     def _stage(self,stage,status,payload):
         if stage in self.stage_labels:
             label=self.stage_labels[stage]
-            if status=="running": label.setText("En curso…"); label.setStyleSheet("padding:6px;border-radius:6px;background:#fff3cd;color:#664d03;")
-            elif status=="ok": label.setText("✓ Completado"); label.setStyleSheet("padding:6px;border-radius:6px;background:#d1e7dd;color:#0f5132;")
-            elif status=="error": label.setText("✗ Error"); label.setStyleSheet("padding:6px;border-radius:6px;background:#f8d7da;color:#842029;")
+            if status=="running": label.setText("En curso…"); label.setStyleSheet("padding:6px;border-radius:6px;background:#463c2b;color:#f5cf85;")
+            elif status=="ok": label.setText("✓ Completado"); label.setStyleSheet("padding:6px;border-radius:6px;background:#25433d;color:#95ddbb;")
+            elif status=="error": label.setText("✗ Error"); label.setStyleSheet("padding:6px;border-radius:6px;background:#4b303d;color:#ffb4c1;")
         values={"epresis":8 if status=="running" else 28,"reportes":36 if status=="running" else 58,"visitas":64 if status=="running" else 76,"whatsapp":82 if status=="running" else 95}
         if stage in values:self.progress.setValue(max(self.progress.value(),values[stage]))
         if stage=="pipeline" and status=="ok":self.progress.setValue(100)
@@ -283,7 +307,7 @@ class MainWindow(QMainWindow):
 
     def _cell(self,row,col,text,kind):
         if row is None:return
-        item=QTableWidgetItem(text);item.setTextAlignment(Qt.AlignCenter);colors={"ok":QColor("#d1e7dd"),"warn":QColor("#fff3cd"),"bad":QColor("#f8d7da")};item.setBackground(QBrush(colors[kind]));self.summary.setItem(row,col,item)
+        item=QTableWidgetItem(text);item.setTextAlignment(Qt.AlignCenter);colors={"ok":QColor("#25433d"),"warn":QColor("#463c2b"),"bad":QColor("#4b303d")};item.setBackground(QBrush(colors[kind]));self.summary.setItem(row,col,item)
 
     def _settings(self):
         if SettingsDialog(self).exec():self._load_sellers_table()
@@ -302,9 +326,8 @@ class MainWindow(QMainWindow):
         cfg=load_config();folder=resolve_path(cfg,"reports");folder.mkdir(parents=True,exist_ok=True);QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder)))
 
     def closeEvent(self, event):
-        thread = self.visitas_fotos_page.thread
-        if thread is not None and thread.isRunning():
-            QMessageBox.information(self, "Visitas sin foto", "Esperá a que termine la consulta antes de cerrar SmartPost.")
+        if any(thread.isRunning() for thread in self.findChildren(QThread)):
+            QMessageBox.information(self, "Proceso en curso", "Esperá a que termine el proceso antes de cerrar SmartPost.")
             event.ignore()
             return
         super().closeEvent(event)
