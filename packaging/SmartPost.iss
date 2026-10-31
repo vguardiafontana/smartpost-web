@@ -1,6 +1,6 @@
 #define MyAppName "SmartPost"
 #ifndef MyAppVersion
-  #define MyAppVersion "3.0.0"
+  #define MyAppVersion "3.0.1"
 #endif
 #define MyAppPublisher "SmartPost"
 #define MyAppExeName "SmartPost.exe"
@@ -20,7 +20,7 @@ OutputDir=..\dist-installer
 OutputBaseFilename=SmartPost_Instalador
 SetupIconFile=..\assets\smartpost.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
-Compression=lzma2/ultra64
+Compression=lzma2/normal
 SolidCompression=yes
 WizardStyle=modern
 CloseApplications=yes

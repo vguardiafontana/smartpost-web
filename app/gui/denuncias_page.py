@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import re
+from copy import deepcopy
 from datetime import datetime
+from pathlib import Path
 
-from PySide6.QtCore import Qt, QDate, QThread, Signal
+from PySide6.QtCore import Qt, QDate, QThread, Signal, QUrl
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QTableWidget,
     QTableWidgetItem, QHeaderView, QGroupBox, QFormLayout, QLineEdit,
@@ -13,6 +16,8 @@ from PySide6.QtWidgets import (
 from app.core.config import load_config, resolve_path
 from app.denuncias.narratives import ShipmentLine, generate_unknown_circumstances
 from app.denuncias.input_parser import parse_identifiers
+from app.denuncias.history import downloaded_reports
+from app.gui.denuncias_messages_dialog import DenunciasMessagesDialog
 from app.gui.error_dialog import ErrorDialog
 from app.gui.workers import DenunciasLookupWorker, DenunciasSubmitWorker
 
@@ -27,6 +32,7 @@ class DenunciasPage(QWidget):
         self.submit_thread = None
         self.submit_worker = None
         self.shipments: list[dict] = []
+        self._latest_denuncia = None
         self._pending_submit: bool | None = None
         self._build_ui()
 
@@ -50,9 +56,16 @@ class DenunciasPage(QWidget):
         back = QPushButton("← Inicio"); back.clicked.connect(self.back_requested.emit)
         title = QLabel("Denuncias de siniestro"); title.setStyleSheet("font-size:22px;font-weight:800;")
         top.addWidget(back); top.addWidget(title); top.addStretch(1)
-        history = QPushButton("Ver denuncias descargadas / mensajes")
-        history.clicked.connect(self._open_history); top.addWidget(history)
         root.addLayout(top)
+        actions = QHBoxLayout()
+        self.messages_btn = QPushButton('Ver mensajes')
+        self.messages_btn.setToolTip('Mensajes por seller de la última denuncia finalizada.')
+        self.messages_btn.clicked.connect(self._open_messages)
+        self.downloads_btn = QPushButton('Ver denuncias descargadas')
+        self.downloads_btn.setToolTip('Abre la carpeta con todos los PDF en el Explorador de Windows.')
+        self.downloads_btn.clicked.connect(self._open_downloads)
+        actions.addWidget(self.messages_btn); actions.addWidget(self.downloads_btn); actions.addStretch()
+        root.addLayout(actions)
 
         hint = QLabel(
             "Pegá todos los números que tengas. Pueden ser N° de guía SmartPost, Remito o Guía Agente. "
@@ -151,11 +164,29 @@ class DenunciasPage(QWidget):
         self.logs.setStyleSheet("font-family:Consolas,monospace;font-size:10px;")
         root.addWidget(self.logs)
 
-    def _open_history(self):
-        from app.gui.denuncias_history_dialog import DenunciasHistoryDialog
-        folder = resolve_path(load_config(), "denuncias_output")
-        folder.mkdir(parents=True, exist_ok=True)
-        DenunciasHistoryDialog(folder, self).exec()
+    def _open_downloads(self):
+        try:
+            folder = resolve_path(load_config(), 'denuncias_output').resolve()
+            folder.mkdir(parents=True, exist_ok=True)
+            if not QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder))):
+                raise OSError('No se pudo abrir el Explorador de Windows.')
+        except OSError:
+            QMessageBox.warning(self, 'Carpeta de denuncias', 'No pude abrir la carpeta de denuncias. Volvé a intentarlo.')
+
+    def _open_messages(self):
+        if self._latest_denuncia is None:
+            # Recover the latest downloaded complaint after restarting the app.
+            # No file picker: this action always refers to one completed complaint.
+            try:
+                entries = downloaded_reports(resolve_path(load_config(), 'denuncias_output'))
+            except OSError:
+                entries = []
+            if entries:
+                self._latest_denuncia = entries[0]
+        if not self._latest_denuncia or not self._latest_denuncia.get('sellers'):
+            QMessageBox.information(self, 'Mensajes de la denuncia', 'Todavía no hay mensajes guardados para la última denuncia. Estarán disponibles cuando finalices una denuncia desde SmartPost.')
+            return
+        DenunciasMessagesDialog(self._latest_denuncia, self).exec()
 
     def _clear_all(self):
         self.bulk_input.clear(); self.shipments = []; self.table.setRowCount(0); self.narrative.clear(); self.logs.clear()
@@ -165,6 +196,7 @@ class DenunciasPage(QWidget):
 
     def _set_busy(self, busy: bool):
         self.run_btn.setEnabled(not busy); self.dry_btn.setEnabled(not busy); self.pdf_test_btn.setEnabled(not busy); self.lookup_btn.setEnabled(not busy)
+        self.messages_btn.setEnabled(not busy)
 
     def _lookup(self):
         self._pending_submit = None
@@ -334,6 +366,9 @@ class DenunciasPage(QWidget):
 
     def _submit_finished(self, ok: bool, summary, detail: str):
         self._set_busy(False)
+        summary = summary or {}
+        if summary.get('denuncia') and not summary.get('dry_run'):
+            self._latest_denuncia = deepcopy(summary['denuncia'])
         if not ok:
             ErrorDialog(detail, self).exec(); return
         if summary.get("dry_run"):

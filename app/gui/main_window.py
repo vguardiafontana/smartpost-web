@@ -19,6 +19,7 @@ from app.gui.settings_dialog import SettingsDialog
 from app.gui.setup_wizard import InitialSetupWizard
 from app.gui.workers import PipelineWorker, WhatsAppLoginWorker, WhatsAppArchiveToggleWorker
 from app.gui.denuncias_page import DenunciasPage
+from app.gui.cambio_estado_v2_page import CambioEstadoV2Page
 from app.gui.busqueda_guias_page import BusquedaGuiasPage
 from app.gui.visitas_fotos_page import VisitasFotosPage
 
@@ -63,7 +64,7 @@ class MainWindow(QMainWindow):
         label = QLabel("TU ESPACIO DE TRABAJO"); label.setObjectName("eyebrow"); side.addWidget(label)
         side.addSpacing(28)
         self.nav_buttons = {}
-        for key, text in (("home_page", "Inicio"), ("reports_page", "Reportes y Visitas"),
+        for key, text in (("home_page", "Inicio"), ("cambio_estado_v2_page", "Cambio de estado v2"), ("reports_page", "Reportes y Visitas"),
                           ("denuncias_page", "Denuncias"), ("busqueda_guias_page", "Búsqueda de guías"),
                           ("visitas_fotos_page", "Visitas sin foto")):
             button = QPushButton(text); button.setObjectName("navButton"); button.setCheckable(True)
@@ -85,6 +86,9 @@ class MainWindow(QMainWindow):
         self.stack = QStackedWidget(); root.addWidget(self.stack, 1)
         self.home_page = self._build_home_page(); self.stack.addWidget(self.home_page)
         self.reports_page = self._build_reports_page(); self.stack.addWidget(self.reports_page)
+        self.cambio_estado_v2_page = CambioEstadoV2Page()
+        self.cambio_estado_v2_page.back_requested.connect(lambda: self.stack.setCurrentWidget(self.home_page))
+        self.stack.addWidget(self.cambio_estado_v2_page)
         self.denuncias_page = DenunciasPage(); self.denuncias_page.back_requested.connect(lambda: self.stack.setCurrentWidget(self.home_page))
         self.stack.addWidget(self.denuncias_page)
         self.busqueda_guias_page = BusquedaGuiasPage(); self.busqueda_guias_page.back_requested.connect(lambda: self.stack.setCurrentWidget(self.home_page))
@@ -122,10 +126,11 @@ class MainWindow(QMainWindow):
         tools.addWidget(self.archive_toggle_btn); tools.addStretch(); layout.addLayout(tools)
         cards = QGridLayout(); cards.setHorizontalSpacing(16); cards.setVerticalSpacing(16)
         modules = (
-            ("01", "Reportes y Visitas", "Descargá los Excel de Epresis y enviá los reportes a tus grupos.", "reports_page"),
-            ("02", "Denuncias", "Prepará denuncias, consultá los PDF descargados y copiá los mensajes por seller.", "denuncias_page"),
-            ("03", "Búsqueda de guías", "Encontrá envíos por guía, remito o guía agente y consultá sus datos.", "busqueda_guias_page"),
-            ("04", "Visitas sin foto", "Detectá fotos pendientes según la cantidad de visitas de cada envío.", "visitas_fotos_page"),
+            ("01", "Cambio de estado v2", "Actualizá pedidos por Rendición de Chofer con la fecha y el estado elegidos.", "cambio_estado_v2_page"),
+            ("02", "Reportes y Visitas", "Descargá los Excel de Epresis y enviá los reportes a tus grupos.", "reports_page"),
+            ("03", "Denuncias", "Prepará denuncias, abrí la carpeta de PDF y copiá los mensajes de la última denuncia.", "denuncias_page"),
+            ("04", "Búsqueda de guías", "Encontrá envíos por guía, remito o guía agente y consultá sus datos.", "busqueda_guias_page"),
+            ("05", "Visitas sin foto", "Detectá fotos pendientes según la cantidad de visitas de cada envío.", "visitas_fotos_page"),
         )
         for index, (number, title, body, target) in enumerate(modules):
             card = self._module_card(title, body, "Abrir módulo", number)

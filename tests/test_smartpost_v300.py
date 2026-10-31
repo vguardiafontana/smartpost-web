@@ -124,9 +124,11 @@ def test_desktop_modules_navigation_icon_and_silent_launch(tmp_path, monkeypatch
     app = QApplication.instance() or QApplication([])
     window = MainWindow(); window.show(); app.processEvents()
     assert not window.windowIcon().isNull()
-    assert not hasattr(window, 'cambio_estado_v2_page')
-    assert not any('Cambio de estado' in button.text() for button in window.findChildren(QPushButton))
-    assert len(window.nav_buttons) == 5
+    assert hasattr(window, 'cambio_estado_v2_page')
+    assert not hasattr(window, 'cambio_estado_page')
+    assert not any(button.text() == 'Cambio de estado' for button in window.findChildren(QPushButton))
+    assert window.cambio_estado_v2_page.date_edit.calendarPopup()
+    assert len(window.nav_buttons) == 6
     for name, button in window.nav_buttons.items():
         button.click(); app.processEvents()
         assert window.stack.currentWidget() is getattr(window, name)

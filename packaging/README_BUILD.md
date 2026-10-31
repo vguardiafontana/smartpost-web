@@ -4,11 +4,11 @@
 
 Los cambios de Desktop en main activan `.github/workflows/build-installer.yml`. GitHub construye un instalador con Python, bibliotecas, Chromium y su driver, ejecuta las pruebas y prueba una instalación limpia. Sólo después publica `SmartPost_Instalador.exe` en un Release. Los cambios exclusivos de `app/web/` no activan una nueva entrega de Desktop.
 
-Enlace fijo: https://github.com/vguardiafontana/smartpost-web/releases/latest/download/SmartPost_Instalador.exe
+Enlace fijo: https://github.com/vguardiafontana/smartpost-web/releases/latest
 
 La versión del instalador concatena la versión base de `SmartPost.iss` y el número de compilación de GitHub, por ejemplo `2.9.7.1`. Una ejecución fallida conserva el último Release válido. Se publican además el SHA-256 y el resultado de la prueba del ejecutable instalado.
 
-Este enlace no hace pública una cuenta o repositorio privado. El usuario debe tener acceso al repositorio. La PC de uso no requiere Python ni descargas de paquetes. Excel sigue siendo necesario para los reportes que usan COM. En una PC nueva se configura Epresis y se vincula WhatsApp desde la aplicación.
+El repositorio y las descargas son públicos; no hace falta iniciar sesión. La PC de uso no requiere Python ni descargas de paquetes. Excel sigue siendo necesario para los reportes que usan COM. En una PC nueva se configura Epresis y se vincula WhatsApp desde la aplicación.
 
 El usuario final **no usa estas instrucciones**. Son solo para construir una nueva versión del instalador.
 

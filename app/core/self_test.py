@@ -36,8 +36,15 @@ def run_self_test(report_path: str) -> int:
             window = MainWindow()
             app.processEvents()
             assert window.archive_toggle_btn.text() == 'Archivar / desarchivar'
-            assert not hasattr(window, 'cambio_estado_v2_page')
-            assert window.stack.count() == 5
+            assert window.cambio_estado_v2_page.date_edit.calendarPopup()
+            assert not hasattr(window, 'cambio_estado_page')
+            assert window.stack.count() == 6
+            assert window.denuncias_page.messages_btn.text() == 'Ver mensajes'
+            assert window.denuncias_page.downloads_btn.text() == 'Ver denuncias descargadas'
+            from app.gui.denuncias_messages_dialog import DenunciasMessagesDialog
+            messages = DenunciasMessagesDialog({'filename': 'PRUEBA.pdf', 'sellers': [{'seller': 'PRUEBA', 'message': 'Mensaje de prueba'}]})
+            assert messages.sellers.currentText() == 'PRUEBA'
+            messages.close()
             assert not window.windowIcon().isNull()
             assert resource_path('assets/fonts/InterVariable.ttf').is_file()
             assert resource_path('assets/icons/home.svg').is_file()

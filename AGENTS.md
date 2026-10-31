@@ -7,7 +7,8 @@
 - Incluir las dependencias y Chromium dentro del instalador. No incluir credenciales, sesiones ni datos del usuario. Excel de escritorio sigue siendo una dependencia externa para los reportes oficiales existentes.
 - Mantener separados los cambios funcionales de Web y Desktop. No reemplazar archivos web con una copia anterior de Desktop.
 - Usar el contexto maestro del proyecto cuando esté disponible; conservar la lógica de negocio y ejecutar las pruebas pertinentes.
-- Desktop no ofrece Cambio de estado v1 ni v2 en su interfaz; Cambio de estado v2 sigue en Web. Mantener los servicios compartidos necesarios para Web.
+- Desktop conserva Cambio de estado v2 (Rendición de Chofer) y sólo excluye el Cambio de estado normal/v1. V2 sigue también en Web. Esta es la aclaración vigente del usuario del 30/10/2026.
+- Denuncias tiene dos acciones distintas: Ver mensajes muestra los de la última denuncia finalizada por seller; Ver denuncias descargadas abre la carpeta completa en el Explorador de Windows.
 - Mantener la interfaz oscura/violeta, el inicio sin consola y el icono de SmartPost en el ejecutable, accesos directos y barra de tareas.
 - Visitas sin foto requiere al menos una evidencia por número de visita (segunda: dos fotos; tercera: tres). No dar por completa una visita por una foto anterior ni convertir fallos de consulta en ausencia de foto.
 - Archivar/desarchivar es un botón automático: usar el recorrido actual de Archivados, confirmar su vaciado antes de cambiar a archivar y conservar la dirección al recuperarse de una interrupción.

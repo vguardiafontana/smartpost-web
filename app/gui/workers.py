@@ -120,6 +120,7 @@ class DenunciasSubmitWorker(QObject):
     @Slot()
     def run(self):
         state = None
+        summary = {'dry_run': self.dry_run, 'send_whatsapp': self.send_whatsapp, 'pdf': '', 'whatsapp': []}
         try:
             from app.denuncias.gba_form import submit_gba_denuncia
             from app.denuncias.whatsapp import send_denuncia_pdf
@@ -140,7 +141,8 @@ class DenunciasSubmitWorker(QObject):
             summary = {"dry_run": self.dry_run, "send_whatsapp": self.send_whatsapp, "pdf": str(pdf) if pdf else "", "whatsapp": []}
             if pdf is not None and not self.dry_run:
                 from app.denuncias.history import save_history
-                save_history(pdf, self.shipments, cfg)
+                entry = save_history(pdf, self.shipments, cfg)
+                summary['denuncia'] = {'pdf': str(pdf), 'filename': Path(pdf).name, **entry}
             if pdf is not None and not self.dry_run and self.send_whatsapp:
                 grouped = {}
                 for s in self.shipments:
@@ -151,7 +153,7 @@ class DenunciasSubmitWorker(QObject):
                 summary["whatsapp"] = asyncio.run(send_denuncia_pdf(Path(pdf), grouped, cfg, state, ctx, logger.getChild("WHATSAPP")))
             self.finished.emit(True, summary, "")
         except Exception:
-            self.finished.emit(False, {}, traceback.format_exc())
+            self.finished.emit(False, summary, traceback.format_exc())
         finally:
             if state is not None:
                 try:

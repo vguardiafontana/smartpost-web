@@ -1,10 +1,10 @@
-> Versión actual: v3.0.0 — Desktop y Web
+> Versión actual: Desktop v3.0.1 — Web v3.0.0
 
 ## Descargar SmartPost Desktop
 
 [Abrir la página de descarga para Windows](https://github.com/vguardiafontana/smartpost-web/releases/latest). En la sección Assets, seleccionar **SmartPost_Instalador.exe** para empezar la descarga. Abrir la página no descarga archivos automáticamente.
 
-El instalador incluye Python, las bibliotecas y Chromium. En la PC de uso no hace falta instalar dependencias. Los reportes oficiales existentes requieren Microsoft Excel de escritorio. Si el repositorio es privado, iniciar sesión en GitHub con una cuenta que tenga acceso.
+El instalador incluye Python, las bibliotecas y Chromium. En la PC de uso no hace falta instalar dependencias. Los reportes oficiales existentes requieren Microsoft Excel de escritorio. La página de descarga es pública y no requiere iniciar sesión en GitHub.
 
 Cada cambio de Desktop subido a main genera una compilación, pruebas del ejecutable y de una instalación limpia, y un Release nuevo. El enlace de descarga se conserva entre versiones. Ver `AGENTS.md` y `packaging/README_BUILD.md`.
 

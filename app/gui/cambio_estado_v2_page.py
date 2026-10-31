@@ -33,7 +33,7 @@ class CambioEstadoV2Page(QWidget):
             "Nuevo flujo por Rendición de Chofer. SmartPost resuelve cada pedido, identifica su distribuidor, "
             "busca la planilla de la fecha seleccionada, verifica que el pedido esté dentro de esa planilla y agrupa los cambios por chofer/planilla."
         )
-        info.setWordWrap(True); info.setStyleSheet("color:#7a4b00;background:#fff3cd;padding:9px;border-radius:6px;")
+        info.setWordWrap(True); info.setStyleSheet("color:#c5b6ff;background:#303244;padding:9px;border-radius:6px;")
         root.addWidget(info)
 
         controls_box = QGroupBox("Nuevo estado e identificadores")
@@ -58,6 +58,7 @@ class CambioEstadoV2Page(QWidget):
         self.bulk_input.setMinimumHeight(120); cv.addWidget(self.bulk_input)
         buttons = QHBoxLayout()
         self.change_btn = QPushButton("CAMBIAR ESTADO V2")
+        self.change_btn.setProperty('primary', True)
         self.change_btn.setMinimumHeight(42); self.change_btn.setStyleSheet("font-weight:800;")
         self.change_btn.clicked.connect(self._change)
         clear = QPushButton("Limpiar"); clear.clicked.connect(self._clear)
