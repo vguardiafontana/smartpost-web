@@ -14,6 +14,7 @@ from typing import Any, Callable
 from openpyxl import load_workbook
 
 from app.core.config import build_alias_map, load_config, resolve_path, seller_configs
+from app.core.dates import business_now
 from app.core.models import RunContext
 from app.core.state import StateDB
 from app.core.utils import sha256_file
@@ -171,7 +172,8 @@ def _process_batch_portable(cfg: dict, run: RunContext, raw_files: list[Path], e
     return result
 
 
-def generate_reports_and_visits(selected_date: datetime, progress: Callable[[str, int, int], None] | None = None) -> dict[str, Any]:
+def generate_reports_and_visits(selected_date: datetime, progress: Callable[[str, int, int], None] | None = None, requested_at: datetime | None = None) -> dict[str, Any]:
+    requested_at = requested_at or business_now()
     cfg = load_config()
     run_id = selected_date.strftime("web_reportes_%Y%m%d_") + datetime.now().strftime("%H%M%S")
     work_dir = resolve_path(cfg, "work") / run_id
@@ -211,6 +213,17 @@ def generate_reports_and_visits(selected_date: datetime, progress: Callable[[str
                 artifacts.append({"kind": "visitas", "seller": "VISITAS", "path": str(vp), "filename": vp.name, "message": str((cfg.get("visitas") or {}).get("whatsapp_message", ""))})
                 visits_status = "generated"
             elif vd.status == "no_data": visits_status = "no_data"
+
+        if requested_at.hour == 23 and (cfg.get("visitas") or {}).get("enabled", True):
+            if progress: progress("Generando SAMEDAY en ruta…", 3, 4)
+            today_run = RunContext(run.run_id, requested_at, run.work_dir, run.dry_run)
+            route = asyncio.run(download_visits(cfg, today_run, logger, visible=False, en_ruta_sameday=True))
+            if route.status == "error": raise RuntimeError("SAMEDAY en ruta terminó con error: " + str(route.error))
+            if route.status == "downloaded":
+                route_cfg = {**cfg, "visitas": {**(cfg.get("visitas") or {}), "filename": "SAMEDAY EN RUTA {date_short}.xlsx"}}
+                info = convert_visits_csv_to_xlsx_portable(route_cfg, today_run, Path(route.local_file), logger)
+                vp = Path(info["path"])
+                artifacts.append({"kind": "en_ruta_sameday", "seller": "SAMEDAY EN RUTA", "path": str(vp), "filename": vp.name, "message": str((cfg.get("visitas") or {}).get("whatsapp_message", ""))})
 
         if progress: progress("Preparando descarga conjunta…", 4, 4)
         bundle = resolve_path(cfg, "reports") / run.date_ddmmyyyy / f"SMARTPOST REPORTES Y VISITAS {run.date_short}.zip"

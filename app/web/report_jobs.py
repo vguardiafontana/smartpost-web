@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from app.core.config import load_config, resolve_path
+from app.core.dates import business_now
 
 
 def _now() -> str:
@@ -99,7 +100,7 @@ class ReportJobManager:
     def create_job(self,date_text: str):
         selected=datetime.strptime(date_text,'%Y-%m-%d')
         jid=uuid.uuid4().hex
-        job={'id':jid,'status':'queued','date':date_text,'created_at':_now(),'started_at':None,'finished_at':None,'progress':{'current':0,'total':4,'message':'En cola…'},'artifacts':[],'no_data':[],'visitas_status':'pending','error':''}
+        job={'id':jid,'status':'queued','date':date_text,'created_at':_now(),'requested_at_business':business_now().isoformat(),'started_at':None,'finished_at':None,'progress':{'current':0,'total':4,'message':'En cola…'},'artifacts':[],'no_data':[],'visitas_status':'pending','error':''}
         self._save(job); self._queue.put(jid); return deepcopy(job)
     def retry(self,job_id):
         job=self.get_job(job_id)
@@ -147,7 +148,7 @@ class ReportJobManager:
             from app.reportes.web_service import generate_reports_and_visits
             selected=datetime.strptime(job['date'],'%Y-%m-%d')
             with self.operation_lock:
-                result=generate_reports_and_visits(selected, lambda m,c,t:self._progress(jid,m,c,t))
+                result=generate_reports_and_visits(selected, lambda m,c,t:self._progress(jid,m,c,t), requested_at=datetime.fromisoformat(job["requested_at_business"]) if job.get("requested_at_business") else business_now())
             metas=[]
             for item in result['artifacts']:
                 p=Path(item['path']); aid=uuid.uuid4().hex

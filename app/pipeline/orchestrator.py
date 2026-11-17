@@ -9,6 +9,7 @@ from datetime import datetime
 from pathlib import Path
 
 from app.core.config import resolve_path
+from app.core.dates import business_now
 from app.core.models import RunContext
 from app.core.state import StateDB
 from app.core.utils import zip_files
@@ -66,6 +67,7 @@ def _write_run_summary(cfg: dict, run: RunContext, payload: dict) -> None:
 
 def run_pipeline(cfg: dict, run: RunContext, state: StateDB, logger, visible_epresis: bool = False, progress_callback=None) -> int:
     started = time.perf_counter()
+    started_at = business_now()
 
     def emit(stage: str, stage_status: str, **payload):
         # `payload` puede contener su propio campo `status` (por ejemplo
@@ -144,6 +146,22 @@ def run_pipeline(cfg: dict, run: RunContext, state: StateDB, logger, visible_epr
             summary["visitas"] = {"status": "disabled"}
             emit("visitas", "ok", status="disabled")
 
+        # Additional report is based on the actual business day at launch.
+        en_ruta_path = None
+        en_ruta_raw = None
+        if started_at.hour == 23 and (cfg.get("visitas") or {}).get("enabled", True):
+            today_run = RunContext(run.run_id, started_at, run.work_dir, run.dry_run)
+            route = asyncio.run(download_visits(cfg, today_run, logger, visible=visible_epresis, en_ruta_sameday=True))
+            summary["en_ruta_sameday"] = {"status": route.status, "error": route.error}
+            if route.status == "error":
+                raise RuntimeError("SAMEDAY en ruta terminó con error: " + str(route.error))
+            if route.status == "downloaded":
+                en_ruta_raw = Path(route.local_file)
+                route_cfg = {**cfg, "visitas": {**(cfg.get("visitas") or {}), "filename": "SAMEDAY EN RUTA {date_short}.xlsx"}}
+                route_excel = convert_visits_csv_to_xlsx(route_cfg, today_run, en_ruta_raw, logger)
+                en_ruta_path = Path(route_excel["path"])
+                summary["en_ruta_sameday"].update(route_excel)
+
         # 4) WHATSAPP
         emit("whatsapp", "running")
         send_results = asyncio.run(
@@ -154,6 +172,7 @@ def run_pipeline(cfg: dict, run: RunContext, state: StateDB, logger, visible_epr
                 run,
                 logger,
                 visits_path=visits_path,
+                en_ruta_path=en_ruta_path,
             )
         )
         summary["whatsapp"] = send_results
@@ -183,6 +202,8 @@ def run_pipeline(cfg: dict, run: RunContext, state: StateDB, logger, visible_epr
         archive_inputs = list(raw_files)
         if visits_raw is not None and visits_raw.exists():
             archive_inputs.append(visits_raw)
+        if en_ruta_raw is not None and en_ruta_raw.exists():
+            archive_inputs.append(en_ruta_raw)
         _archive_raws(cfg, run, archive_inputs, logger)
 
         if run.dry_run:

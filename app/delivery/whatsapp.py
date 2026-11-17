@@ -479,6 +479,7 @@ async def send_reports(
     run: RunContext,
     logger,
     visits_path: Path | None = None,
+    en_ruta_path: Path | None = None,
 ) -> list[dict]:
     wa_cfg = cfg.get("whatsapp", {})
     settings = {
@@ -494,7 +495,7 @@ async def send_reports(
         raise RuntimeError("Faltan grupos de WhatsApp en config.yaml para: " + ", ".join(sorted(missing_groups)))
     visits_cfg = cfg.get("visitas") or {}
     visits_group = str(visits_cfg.get("whatsapp_group", "")).strip()
-    if visits_path is not None and not visits_group:
+    if (visits_path is not None or en_ruta_path is not None) and not visits_group:
         raise RuntimeError("Falta configurar el grupo de WhatsApp para VISITAS.")
 
     profile = resolve_path(cfg, "whatsapp_profile")
@@ -602,7 +603,28 @@ async def send_reports(
                         visits_result = {"status": "error", "seller": "VISITAS", "group": visits_group, "file": Path(visits_path).name, "reason": str(exc2), "retried": True}
                         logger.error("[WHATSAPP] ERROR FINAL VISITAS -> %s: %s", visits_group, exc2)
 
+            route_result = None
+            if en_ruta_path is not None:
+                for attempt in (1, 2):
+                    try:
+                        route_result = await send_one(page, Path(en_ruta_path), "SAMEDAY EN RUTA", visits_group,
+                                                      auto_send, screenshots, settings, state, run,
+                                                      message_template=str(visits_cfg.get("whatsapp_message", "")))
+                        if auto_send and route_result.get("status") == "sent":
+                            await page.wait_for_timeout(int(_wa_perf(settings, "final_visitas_close_delay_ms", 5000)))
+                        break
+                    except Exception as exc:
+                        logger.warning("[WHATSAPP] SAMEDAY EN RUTA intento %d falló: %s", attempt, exc)
+                        if attempt == 1:
+                            await _clear_chat_search(page)
+                            await page.wait_for_timeout(max(500, int(_wa_perf(settings, "pending_retry_pause_ms", 1800))))
+                        else:
+                            route_result = {"status": "error", "seller": "SAMEDAY EN RUTA", "group": visits_group,
+                                            "file": Path(en_ruta_path).name, "reason": str(exc), "retried": True}
+
             results = [results_by_seller[s] for s in report_map if s in results_by_seller]
+            if route_result is not None:
+                results.append(route_result)
             if visits_result is not None:
                 results.append(visits_result)
 

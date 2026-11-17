@@ -1,3 +1,8 @@
+SmartPost Desktop — actualización de reportes
+
+- Al iniciar Reportes y Visitas entre las 23:00 y las 23:59 (hora de Montevideo), genera un Excel adicional de los envíos SAMEDAY del día en estado EN RUTA PARA SU ENTREGA y lo envía al grupo configurado para VISITAS.
+- Se mantiene el reporte de Visitas habitual. La web incorpora el archivo adicional en la descarga individual y en el ZIP; su envío es manual.
+
 SmartPost Desktop 3.0.1
 
 - Se recupera Cambio de estado v2 en el inicio y en la navegación lateral del escritorio, con Rendición de Chofer y fecha seleccionable. Sólo se mantiene fuera el Cambio de estado normal/v1.
