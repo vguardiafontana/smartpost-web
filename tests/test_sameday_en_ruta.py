@@ -24,8 +24,8 @@ def test_route_filter_and_export_use_same_date_service_and_state():
         assert dict(pairs)['cliente_id'] == ''
 
 
-@pytest.mark.parametrize('hour,expected', [(22, False), (23, True), (0, False)])
-def test_web_report_only_adds_today_route_at_23(tmp_path, monkeypatch, hour, expected):
+@pytest.mark.parametrize('hour', [0, 12, 22, 23])
+def test_web_report_adds_today_route_at_any_hour(tmp_path, monkeypatch, hour):
     from types import SimpleNamespace
     import zipfile
     from app.reportes import web_service as web
@@ -46,10 +46,9 @@ def test_web_report_only_adds_today_route_at_23(tmp_path, monkeypatch, hour, exp
     monkeypatch.setattr(web, 'convert_visits_csv_to_xlsx_portable', convert)
     result = web.generate_reports_and_visits(datetime(2026, 10, 18), requested_at=datetime(2026, 10, 19, hour))
     routes = [a for a in result['artifacts'] if a['kind'] == 'en_ruta_sameday']
-    assert bool(routes) is expected
+    assert len(routes) == 1
     assert seen[0] == ('18/10/2026', False)
-    if expected:
-        assert seen[1] == ('19/10/2026', True)
-        bundle = next(a for a in result['artifacts'] if a['kind'] == 'all')
-        with zipfile.ZipFile(bundle['path']) as zf:
-            assert routes[0]['filename'] in zf.namelist()
+    assert seen[1] == ('19/10/2026', True)
+    bundle = next(a for a in result['artifacts'] if a['kind'] == 'all')
+    with zipfile.ZipFile(bundle['path']) as zf:
+        assert routes[0]['filename'] in zf.namelist()

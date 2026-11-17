@@ -214,7 +214,7 @@ def generate_reports_and_visits(selected_date: datetime, progress: Callable[[str
                 visits_status = "generated"
             elif vd.status == "no_data": visits_status = "no_data"
 
-        if requested_at.hour == 23 and (cfg.get("visitas") or {}).get("enabled", True):
+        if (cfg.get("visitas") or {}).get("enabled", True):
             if progress: progress("Generando SAMEDAY en ruta…", 3, 4)
             today_run = RunContext(run.run_id, requested_at, run.work_dir, run.dry_run)
             route = asyncio.run(download_visits(cfg, today_run, logger, visible=False, en_ruta_sameday=True))

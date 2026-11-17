@@ -149,7 +149,7 @@ def run_pipeline(cfg: dict, run: RunContext, state: StateDB, logger, visible_epr
         # Additional report is based on the actual business day at launch.
         en_ruta_path = None
         en_ruta_raw = None
-        if started_at.hour == 23 and (cfg.get("visitas") or {}).get("enabled", True):
+        if (cfg.get("visitas") or {}).get("enabled", True):
             today_run = RunContext(run.run_id, started_at, run.work_dir, run.dry_run)
             route = asyncio.run(download_visits(cfg, today_run, logger, visible=visible_epresis, en_ruta_sameday=True))
             summary["en_ruta_sameday"] = {"status": route.status, "error": route.error}
