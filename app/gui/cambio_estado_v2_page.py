@@ -11,6 +11,7 @@ from app.cambio_estado.service import extract_identifiers
 from app.gui.error_dialog import ErrorDialog
 from app.gui.workers import CambioEstadoV2Worker
 from app.core.dates import operation_date
+from app.gui.date_defaults import follow_business_date
 
 
 class CambioEstadoV2Page(QWidget):
@@ -45,7 +46,7 @@ class CambioEstadoV2Page(QWidget):
         self.state_combo.setMinimumWidth(360)
         state_row.addWidget(self.state_combo); state_row.addStretch(1); cv.addLayout(state_row)
         day = operation_date()
-        self.date_edit = QDateEdit(QDate(day.year, day.month, day.day))
+        self.date_edit = QDateEdit(QDate(day.year, day.month, day.day)); follow_business_date(self.date_edit)
         self.date_edit.setCalendarPopup(True); self.date_edit.setDisplayFormat("dd/MM/yyyy")
         date_row = QHBoxLayout(); date_row.addWidget(QLabel("Fecha de planilla y cambio:"))
         date_row.addWidget(self.date_edit); date_row.addStretch(1); cv.addLayout(date_row)

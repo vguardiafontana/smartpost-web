@@ -17,11 +17,11 @@ function safeUrl(v){const s=String(v||'');return /^https:\/\//i.test(s)?s:''}
 
 async function init(){
   if('serviceWorker' in navigator){navigator.serviceWorker.register('/static/sw.js').catch(()=>{})}
-  try{await api('/api/session');showApp();await loadStates();await resumeBatch()}catch{showLogin()}
+  try{const session=await api('/api/session');applyBusinessDate(session.today);showApp();await loadStates();await resumeBatch()}catch{showLogin()}
 }
 async function loadStates(){const d=await api('/api/states');$('stateSelect').innerHTML=d.states.map(s=>`<option value="${s.id}">${esc(s.label)}</option>`).join('')}
 
-$('loginForm').addEventListener('submit',async e=>{e.preventDefault();$('loginError').textContent='';try{await api('/api/auth/login',{method:'POST',body:JSON.stringify({pin:$('pinInput').value})});$('pinInput').value='';showApp();await loadStates();await resumeBatch()}catch(err){$('loginError').textContent=err.message}})
+$('loginForm').addEventListener('submit',async e=>{e.preventDefault();$('loginError').textContent='';try{await api('/api/auth/login',{method:'POST',body:JSON.stringify({pin:$('pinInput').value})});$('pinInput').value='';const session=await api('/api/session');applyBusinessDate(session.today);showApp();await loadStates();await resumeBatch()}catch(err){$('loginError').textContent=err.message}})
 $('logoutBtn').addEventListener('click',async()=>{try{await api('/api/auth/logout',{method:'POST'})}catch{}clearTimeout(pollTimer);localStorage.removeItem('smartpost_last_job');localStorage.removeItem('smartpost_pending_batch');currentJobId=null;showLogin()})
 document.querySelectorAll('[data-step]').forEach(button=>button.addEventListener('click',()=>{clearTimeout(pollTimer);clearTimeout(reportPollTimer);clearTimeout(visitPhotoTimer);const target=button.dataset.step;step(target);if(target==='jobStep'&&currentJobId)pollJob(currentJobId);if(target==='reportsStep'&&currentReportJobId)pollReportJob(currentReportJobId);if(target==='visitPhotosStep'&&visitPhotoJobId)pollVisitPhotos(visitPhotoJobId)}));
 $('openV2Btn').addEventListener('click',()=>step('composeStep'));
@@ -115,8 +115,21 @@ $('searchBtn').addEventListener('click',async()=>{
 
 
 function localDateISO(){const p=new Intl.DateTimeFormat('en-US',{timeZone:'America/Montevideo',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()),v=t=>p.find(x=>x.type===t).value;return `${v('year')}-${v('month')}-${v('day')}`}
-if($('reportsDate')&&!$('reportsDate').value)$('reportsDate').value=localDateISO();
-if($('stateDate')&&!$('stateDate').value)$('stateDate').value=localDateISO();
+let previousBusinessDate=localDateISO();
+document.querySelectorAll('input[type="date"]').forEach(input=>{input.value=previousBusinessDate});
+function applyBusinessDate(today){
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(today||''))return;
+  if(today!==previousBusinessDate){
+    document.querySelectorAll('input[type="date"]').forEach(input=>{if(!input.value||input.value===previousBusinessDate)input.value=today});
+    previousBusinessDate=today;
+  }
+}
+async function refreshDefaultDates(){
+  try{const r=await fetch('/api/session',{credentials:'same-origin',cache:'no-store'});if(r.ok){const session=await r.json();applyBusinessDate(session.today)}}catch{}
+}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshDefaultDates()});
+window.addEventListener('focus',refreshDefaultDates);
+setInterval(refreshDefaultDates,60000);
 
 $('generateReportsBtn').addEventListener('click',async()=>{
   const date=$('reportsDate').value;if(!date)return toast('Elegí una fecha.');

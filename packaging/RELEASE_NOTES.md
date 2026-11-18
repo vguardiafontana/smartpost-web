@@ -1,3 +1,8 @@
+SmartPost Desktop — fecha actual
+
+- Las fechas de Reportes, Cambio de estado v2 y Denuncias toman el día actual de Uruguay y se actualizan al cambiar de día si siguen en la fecha predeterminada.
+- La web aplica la misma regla a los campos de fecha, conservando las fechas elegidas manualmente.
+
 SmartPost Desktop — corrección del reporte SAMEDAY en ruta
 
 - Se descarga el reporte de hoy en estado en ruta con todos los servicios y luego se filtra por la columna Servicio del archivo, evitando depender del selector de Epresis.

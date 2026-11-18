@@ -151,9 +151,9 @@ def create_app(
         return {"ok": True, "storage": getattr(manager, "storage_backend", "custom")}
 
     @app.get("/api/session")
-    async def session_status(smartpost_session: str | None = Cookie(default=None, alias=COOKIE_NAME)) -> dict[str, bool]:
+    async def session_status(smartpost_session: str | None = Cookie(default=None, alias=COOKIE_NAME)) -> dict[str, Any]:
         require_auth(smartpost_session)
-        return {"authenticated": True}
+        return {"authenticated": True, "today": operation_date().isoformat()}
 
     @app.post("/api/auth/login")
     async def login(body: LoginBody, request: Request, response: Response) -> dict[str, bool]:

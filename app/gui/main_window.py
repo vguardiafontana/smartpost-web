@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QFrame, QSizePolicy, QScrollArea, QApplication
 )
 
+from app.gui.date_defaults import follow_business_date
 from app.core.config import load_config, resolve_path
 from app.core.runtime_paths import resource_path
 from app.core.system_checks import has_excel
@@ -157,7 +158,7 @@ class MainWindow(QMainWindow):
         nav.addWidget(back); nav.addWidget(title); nav.addStretch(1); root.addLayout(nav)
 
         controls = QHBoxLayout(); controls.addWidget(QLabel("Fecha del reporte:"))
-        self.date = QDateEdit(QDate.currentDate()); self.date.setCalendarPopup(True); self.date.setDisplayFormat("dd-MM-yyyy"); self.date.setMinimumWidth(150)
+        self.date = QDateEdit(); follow_business_date(self.date); self.date.setCalendarPopup(True); self.date.setDisplayFormat("dd-MM-yyyy"); self.date.setMinimumWidth(150)
         controls.addWidget(self.date)
         self.run_btn = QPushButton("Ejecutar"); self.dry_btn = QPushButton("Probar sin enviar"); self.open_reports_btn = QPushButton("Abrir reportes")
         self.run_btn.setProperty('primary', True)

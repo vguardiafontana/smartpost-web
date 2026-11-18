@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QDateEdit, QComboBox, QTextEdit, QMessageBox, QCheckBox, QScrollArea, QSizePolicy
 )
 
+from app.gui.date_defaults import follow_business_date
 from app.core.config import load_config, resolve_path
 from app.denuncias.narratives import ShipmentLine, generate_unknown_circumstances
 from app.denuncias.input_parser import parse_identifiers
@@ -124,7 +125,7 @@ class DenunciasPage(QWidget):
 
         incident_box = QGroupBox("Datos automáticos del hecho")
         inf = QFormLayout(incident_box)
-        self.date = QDateEdit(QDate.currentDate()); self.date.setCalendarPopup(True); self.date.setDisplayFormat("dd/MM/yyyy")
+        self.date = QDateEdit(); follow_business_date(self.date); self.date.setCalendarPopup(True); self.date.setDisplayFormat("dd/MM/yyyy")
         cfg = load_config(); dcfg = cfg.get("denuncias") or {}
         self.time = QLineEdit(str(dcfg.get("default_time", "21:00")))
         self.partido = QLineEdit(); self.locality = QLineEdit(); self.street = QLineEdit(); self.number = QLineEdit()
