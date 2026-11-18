@@ -8,7 +8,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 COPY requirements-web.txt /app/requirements-web.txt
-RUN pip install --no-cache-dir -r /app/requirements-web.txt \
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libatomic1 \
+    && rm -rf /var/lib/apt/lists/* \
+    && pip install --no-cache-dir -r /app/requirements-web.txt \
     && python -m playwright install --with-deps chromium
 
 COPY . /app

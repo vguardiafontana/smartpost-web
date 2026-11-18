@@ -1,0 +1,21 @@
+name: Verify web container
+on:
+  push:
+    branches: [main]
+    paths: ['Dockerfile', 'requirements-web.txt', '.github/workflows/verify-web-container.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Build web container
+        run: docker build -t smartpost-web-test .
+      - name: Check Playwright and web startup
+        run: |
+          docker run --rm smartpost-web-test python -c "from playwright.sync_api import sync_playwright; p=sync_playwright().start(); b=p.chromium.launch(headless=True, args=['--no-sandbox']); b.close(); p.stop(); import app.web.server"
