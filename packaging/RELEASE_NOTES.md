@@ -1,3 +1,8 @@
+SmartPost Desktop — corrección del reporte SAMEDAY en ruta
+
+- Se descarga el reporte de hoy en estado en ruta con todos los servicios y luego se filtra por la columna Servicio del archivo, evitando depender del selector de Epresis.
+- Si no hay registros SAMEDAY, no se genera ni envía un archivo vacío.
+
 SmartPost Desktop — actualización de reportes
 
 - Al iniciar Reportes y Visitas a cualquier hora, genera un Excel adicional de los envíos SAMEDAY del día en estado EN RUTA PARA SU ENTREGA y lo envía al grupo configurado para VISITAS.

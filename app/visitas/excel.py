@@ -9,6 +9,7 @@ from app.core.utils import safe_filename
 from app.procesamiento.io_sources import read_csv_file
 from app.procesamiento.processor import close_excel, make_excel_app
 from app.procesamiento.rules import EXPECTED_HEADERS, normalize_key
+from app.visitas.filtering import filter_sameday_rows
 
 XL_OPENXML_WORKBOOK = 51
 
@@ -58,7 +59,7 @@ def _output_path(cfg: dict, run: RunContext) -> Path:
     return root / name
 
 
-def convert_visits_csv_to_xlsx(cfg: dict, run: RunContext, csv_path: Path, logger) -> dict:
+def convert_visits_csv_to_xlsx(cfg: dict, run: RunContext, csv_path: Path, logger, sameday_only: bool = False) -> dict:
     """Convert the Epresis VISITAS CSV into a stable XLSX using real Excel.
 
     Every source value is written as text. This intentionally prevents Excel
@@ -66,6 +67,11 @@ def convert_visits_csv_to_xlsx(cfg: dict, run: RunContext, csv_path: Path, logge
     codes as errors or changing locale-sensitive values during the conversion.
     """
     headers, rows = _validated_csv(csv_path)
+    if sameday_only:
+        rows = filter_sameday_rows(headers, rows)
+        if not rows:
+            logger.info("[SAMEDAY EN RUTA] No hay registros SAMEDAY en el archivo descargado.")
+            return {"status": "no_data", "rows": 0, "columns": len(headers)}
     output = _output_path(cfg, run)
     if output.exists():
         output.unlink()

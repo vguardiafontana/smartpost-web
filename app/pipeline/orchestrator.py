@@ -158,8 +158,9 @@ def run_pipeline(cfg: dict, run: RunContext, state: StateDB, logger, visible_epr
             if route.status == "downloaded":
                 en_ruta_raw = Path(route.local_file)
                 route_cfg = {**cfg, "visitas": {**(cfg.get("visitas") or {}), "filename": "SAMEDAY EN RUTA {date_short}.xlsx"}}
-                route_excel = convert_visits_csv_to_xlsx(route_cfg, today_run, en_ruta_raw, logger)
-                en_ruta_path = Path(route_excel["path"])
+                route_excel = convert_visits_csv_to_xlsx(route_cfg, today_run, en_ruta_raw, logger, sameday_only=True)
+                if route_excel.get("status") == "generated":
+                    en_ruta_path = Path(route_excel["path"])
                 summary["en_ruta_sameday"].update(route_excel)
 
         # 4) WHATSAPP

@@ -12,6 +12,7 @@ from app.core.models import RunContext
 from app.core.utils import safe_filename
 from app.procesamiento.io_sources import read_csv_file
 from app.procesamiento.rules import EXPECTED_HEADERS, normalize_key
+from app.visitas.filtering import filter_sameday_rows
 
 
 def _validated_csv(path: Path) -> tuple[list[str], list[list[str]]]:
@@ -45,8 +46,13 @@ def _output_path(cfg: dict, run: RunContext) -> Path:
     return root / safe_filename(name)
 
 
-def convert_visits_csv_to_xlsx_portable(cfg: dict, run: RunContext, csv_path: Path, logger) -> dict:
+def convert_visits_csv_to_xlsx_portable(cfg: dict, run: RunContext, csv_path: Path, logger, sameday_only: bool = False) -> dict:
     headers, rows = _validated_csv(csv_path)
+    if sameday_only:
+        rows = filter_sameday_rows(headers, rows)
+        if not rows:
+            logger.info("[SAMEDAY EN RUTA] No hay registros SAMEDAY en el archivo descargado.")
+            return {"status": "no_data", "rows": 0, "columns": len(headers)}
     output = _output_path(cfg, run)
     wb = Workbook()
     ws = wb.active

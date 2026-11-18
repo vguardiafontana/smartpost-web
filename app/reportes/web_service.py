@@ -221,9 +221,10 @@ def generate_reports_and_visits(selected_date: datetime, progress: Callable[[str
             if route.status == "error": raise RuntimeError("SAMEDAY en ruta terminó con error: " + str(route.error))
             if route.status == "downloaded":
                 route_cfg = {**cfg, "visitas": {**(cfg.get("visitas") or {}), "filename": "SAMEDAY EN RUTA {date_short}.xlsx"}}
-                info = convert_visits_csv_to_xlsx_portable(route_cfg, today_run, Path(route.local_file), logger)
-                vp = Path(info["path"])
-                artifacts.append({"kind": "en_ruta_sameday", "seller": "SAMEDAY EN RUTA", "path": str(vp), "filename": vp.name, "message": str((cfg.get("visitas") or {}).get("whatsapp_message", ""))})
+                info = convert_visits_csv_to_xlsx_portable(route_cfg, today_run, Path(route.local_file), logger, sameday_only=True)
+                if info.get("status") == "generated":
+                    vp = Path(info["path"])
+                    artifacts.append({"kind": "en_ruta_sameday", "seller": "SAMEDAY EN RUTA", "path": str(vp), "filename": vp.name, "message": str((cfg.get("visitas") or {}).get("whatsapp_message", ""))})
 
         if progress: progress("Preparando descarga conjunta…", 4, 4)
         bundle = resolve_path(cfg, "reports") / run.date_ddmmyyyy / f"SMARTPOST REPORTES Y VISITAS {run.date_short}.zip"

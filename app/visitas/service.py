@@ -29,19 +29,6 @@ def _state_ids(cfg: dict) -> list[int]:
     return [int(item["id"]) for item in (visits.get("estados") or [])]
 
 
-def _sameday_service_id(options: list[dict]) -> str:
-    matches = {str(o["value"]) for o in options if str(o.get("value", "")).strip() and
-               "".join(c for c in str(o.get("text", "")).upper() if c.isalnum()) == "SAMEDAY"}
-    if len(matches) != 1:
-        raise RuntimeError("No se pudo identificar de forma única el servicio SAMEDAY en Epresis.")
-    return matches.pop()
-
-
-def _route_payload(api, date_text: str, service_id: str, export: bool):
-    return [(key, service_id if key == "servicio_id" else value)
-            for key, value in api.make_visits_payload(date_text, [70], export)]
-
-
 async def _download_once(cfg: dict, run: RunContext, logger, visible: bool = False, en_ruta_sameday: bool = False) -> VisitsDownloadResult:
     visits_cfg = cfg.get("visitas") or {}
     if not visits_cfg.get("enabled", True):
@@ -77,21 +64,7 @@ async def _download_once(cfg: dict, run: RunContext, logger, visible: bool = Fal
                 ", ".join(str(x) for x in state_ids),
             )
 
-            service_id = None
-            if en_ruta_sameday:
-                options = await page.locator('select[name="servicio_id"] option, select#servicio_id option').evaluate_all(
-                    "els => els.map(e => ({value: e.value, text: e.textContent.trim()}))")
-                service_id = _sameday_service_id(options)
-
-            async def filter_report():
-                pairs = _route_payload(api, date_text, service_id, False)
-                return await api._post_pairs(settings["filter_path"], pairs, "filtrar reporte")
-
-            async def export_report():
-                pairs = _route_payload(api, date_text, service_id, True)
-                return await api._export_payload_call(pairs, "exportar reporte")
-
-            filtered = await filter_report() if en_ruta_sameday else await api.filter_visits(date_text, state_ids)
+            filtered = await api.filter_visits(date_text, state_ids)
             count = api.filter_result_count(filtered)
             if count == 0:
                 logger.warning("[VISITAS] Sin registros para %s", run.date_slash)
@@ -99,13 +72,13 @@ async def _download_once(cfg: dict, run: RunContext, logger, visible: bool = Fal
             if count is not None:
                 logger.info("[VISITAS] Filtro -> %d registro(s)", count)
 
-            initial = await export_report() if en_ruta_sameday else await api.export_visits_call(date_text, state_ids)
+            initial = await api.export_visits_call(date_text, state_ids)
             logger.info(
                 "[VISITAS] Export programado job=%s status=%s",
                 initial.get("job_id"),
                 initial.get("status"),
             )
-            ready = await api._wait_for_export_generic(initial, export_report, filter_report, "SAMEDAY en ruta") if en_ruta_sameday else await api.wait_for_visits_export(date_text, state_ids, initial)
+            ready = await api.wait_for_visits_export(date_text, state_ids, initial)
             path = await api.download(ready, raw_dir)
             if path.suffix.lower() == ".csv" and not csv_has_data_rows(path):
                 path.unlink(missing_ok=True)
