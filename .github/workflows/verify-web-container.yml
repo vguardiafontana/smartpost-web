@@ -18,4 +18,4 @@ jobs:
         run: docker build -t smartpost-web-test .
       - name: Check Playwright and web startup
         run: |
-          docker run --rm smartpost-web-test python -c "from playwright.sync_api import sync_playwright; p=sync_playwright().start(); b=p.chromium.launch(headless=True, args=['--no-sandbox']); b.close(); p.stop(); import app.web.server"
+          docker run --rm -e SMARTPOST_WEB_PIN=246810 -e SMARTPOST_WEB_SESSION_SECRET=test-only-secret-012345678901234567890123456789 smartpost-web-test python -c "from playwright.sync_api import sync_playwright; p=sync_playwright().start(); b=p.chromium.launch(headless=True, args=['--no-sandbox']); b.close(); p.stop(); import app.web.server"
