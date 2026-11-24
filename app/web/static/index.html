@@ -125,7 +125,19 @@
           <label for="reportsDate">Fecha</label>
           <input id="reportsDate" type="date">
           <button id="generateReportsBtn" class="primary full">Generar reportes</button>
+          <button id="manageSellersBtn" class="secondary full" type="button">Administrar sellers</button>
           <p class="muted small">No se envía nada por WhatsApp. Solo se generan los archivos y los mensajes para copiar.</p>
+        </section>
+        <section id="sellerManagement" class="card hidden">
+          <h2>Administración de sellers</h2>
+          <button id="addSellerBtn" class="primary full" type="button">+ Agregar seller</button>
+          <form id="sellerForm" class="hidden">
+            <label for="sellerName">Nombre del seller</label><input id="sellerName" required maxlength="100">
+            <label for="sellerClient">Cliente como aparece en Precis</label><input id="sellerClient" required maxlength="200">
+            <fieldset class="seller-days"><legend>Días de generación</legend><div id="sellerDays"></div></fieldset>
+            <div class="row-actions"><button class="primary" type="submit">Guardar seller</button><button id="cancelSellerBtn" class="secondary" type="button">Cancelar</button></div>
+          </form>
+          <p id="sellerStatus" class="muted small" role="status"></p><div id="sellerRows" class="rows"></div>
         </section>
         <section id="reportsProgressCard" class="card hidden">
           <div class="eyebrow">PROCESO</div>

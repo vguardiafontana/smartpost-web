@@ -1,3 +1,8 @@
+SmartPost Desktop — administración de sellers
+
+- Reportes y Visitas permite agregar, editar y eliminar sellers, configurar su cliente exacto en Precis, grupo de WhatsApp y días habilitados. Se conserva el flujo manual y la generación de Excel existente.
+- La configuración Desktop se guarda localmente; la administración Web se mantiene separada.
+
 SmartPost Desktop — fecha actual
 
 - Las fechas de Reportes, Cambio de estado v2 y Denuncias toman el día actual de Uruguay y se actualizan al cambiar de día si siguen en la fecha predeterminada.

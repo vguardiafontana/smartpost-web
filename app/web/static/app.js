@@ -252,3 +252,37 @@ $('logoutBtn').addEventListener('click',()=>{
 });
 
 init();
+
+// Seller administration: only the configuration of report participants.
+const sellerDayNames=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+let sellerList=[],sellerOriginal=null,sellerBusy=false;
+$('sellerDays').innerHTML=sellerDayNames.map((d,i)=>`<label><input type="checkbox" value="${i}">${d}</label>`).join('');
+function sellerForm(s=null){
+  sellerOriginal=s?s.seller:null;$('sellerName').value=s?s.seller:'';$('sellerClient').value=s?s.client:'';
+  $('sellerDays').querySelectorAll('input').forEach((el,i)=>el.checked=(s?s.days:[0,1,2,3,4]).includes(i));
+  $('sellerForm').classList.remove('hidden');$('sellerName').focus();
+}
+function renderSellers(data){
+  sellerList=data.sellers;$('sellerStatus').textContent=`${sellerList.length} seller(s) configurados`;
+  $('sellerRows').innerHTML=sellerList.map((s,i)=>`<div class="row"><strong>${esc(s.seller)}</strong><div class="row-detail">Precis: ${esc(s.client)}</div><div class="row-detail">${s.days.map(d=>sellerDayNames[d]).join(' · ')}${s.enabled?'':' · Deshabilitado'}</div><div class="row-actions"><button type="button" class="secondary" data-edit-seller="${i}">Editar</button><button type="button" class="danger" data-delete-seller="${i}">Eliminar</button></div></div>`).join('');
+  $('sellerRows').querySelectorAll('[data-edit-seller]').forEach(b=>b.onclick=()=>{if(!sellerBusy)sellerForm(sellerList[Number(b.dataset.editSeller)])});
+  $('sellerRows').querySelectorAll('[data-delete-seller]').forEach(b=>b.onclick=async()=>{
+    if(sellerBusy)return;const s=sellerList[Number(b.dataset.deleteSeller)];if(!confirm(`¿Eliminar ${s.seller} de los próximos reportes?`))return;
+    await sellerAction('/api/report-sellers/delete',{seller:s.seller});
+  });
+}
+async function sellerAction(path,body){
+  if(sellerBusy)return;sellerBusy=true;
+  try{renderSellers(await api(path,{method:'POST',body:JSON.stringify(body)}));$('sellerForm').classList.add('hidden');toast('Configuración guardada')}catch(err){$('sellerStatus').textContent=err.message;toast(err.message)}finally{sellerBusy=false}
+}
+$('manageSellersBtn').onclick=async()=>{
+  if(sellerBusy)return;const panel=$('sellerManagement');panel.classList.toggle('hidden');if(panel.classList.contains('hidden'))return;
+  $('sellerForm').classList.add('hidden');$('sellerStatus').textContent='Cargando…';sellerBusy=true;
+  try{renderSellers(await api('/api/report-sellers'))}catch(err){$('sellerRows').innerHTML='';$('sellerStatus').textContent=err.message}finally{sellerBusy=false}
+};
+$('addSellerBtn').onclick=()=>{if(!sellerBusy)sellerForm()};
+$('cancelSellerBtn').onclick=()=>$('sellerForm').classList.add('hidden');
+$('sellerForm').onsubmit=async e=>{
+  e.preventDefault();const days=[...$('sellerDays').querySelectorAll('input:checked')].map(el=>Number(el.value));if(!days.length)return toast('Elegí al menos un día.');
+  await sellerAction('/api/report-sellers',{original:sellerOriginal,seller:$('sellerName').value,client:$('sellerClient').value,days});
+};

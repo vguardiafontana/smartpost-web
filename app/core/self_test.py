@@ -39,6 +39,11 @@ def run_self_test(report_path: str) -> int:
             assert window.cambio_estado_v2_page.date_edit.calendarPopup()
             assert not hasattr(window, 'cambio_estado_page')
             assert window.stack.count() == 6
+            assert window.sellers_btn.text() == 'Administrar sellers'
+            from app.gui.report_sellers_dialog import ReportSellersDialog
+            sellers_dialog = ReportSellersDialog(window)
+            assert sellers_dialog.table.rowCount() == len(cfg['sellers'])
+            sellers_dialog.close()
             assert window.denuncias_page.messages_btn.text() == 'Ver mensajes'
             assert window.denuncias_page.downloads_btn.text() == 'Ver denuncias descargadas'
             from app.gui.denuncias_messages_dialog import DenunciasMessagesDialog

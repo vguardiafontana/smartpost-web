@@ -113,11 +113,12 @@ def report_seller_configs(cfg: dict[str, Any], selected_date, enabled_only: bool
     """
     sellers = seller_configs(cfg, enabled_only=enabled_only)
     try:
-        is_saturday = int(selected_date.weekday()) == 5
+        weekday = int(selected_date.weekday())
     except Exception:
-        is_saturday = False
-    if not is_saturday:
         return sellers
+    is_saturday = weekday == 5
+    if not is_saturday:
+        return [s for s in sellers if "report_days" not in s or weekday in s["report_days"]]
 
     configured = (cfg.get("reportes") or {}).get("saturday_sellers") or [
         "ZETABURGOS",
@@ -129,7 +130,7 @@ def report_seller_configs(cfg: dict[str, Any], selected_date, enabled_only: bool
         "PINTURERIA MILCOLORES",
     ]
     allowed = {str(name).strip() for name in configured if str(name).strip()}
-    return [s for s in sellers if str(s.get("seller", "")).strip() in allowed]
+    return [s for s in sellers if (5 in s["report_days"] if "report_days" in s else str(s.get("seller", "")).strip() in allowed)]
 
 
 def seller_map(cfg: dict[str, Any]) -> dict[str, dict[str, Any]]:

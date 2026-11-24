@@ -12,7 +12,9 @@ from PySide6.QtWidgets import (
 )
 
 from app.gui.date_defaults import follow_business_date
-from app.core.config import load_config, resolve_path
+from app.core.config import load_config, resolve_path, report_seller_configs
+from app.reportes.desktop_sellers import apply_desktop_sellers
+from app.gui.report_sellers_dialog import ReportSellersDialog
 from app.core.runtime_paths import resource_path
 from app.core.system_checks import has_excel
 from app.gui.error_dialog import ErrorDialog
@@ -165,6 +167,7 @@ class MainWindow(QMainWindow):
         self.run_btn.clicked.connect(lambda: self._start_pipeline(False)); self.dry_btn.clicked.connect(lambda: self._start_pipeline(True)); self.open_reports_btn.clicked.connect(self._open_reports)
         for b in (self.run_btn,self.dry_btn,self.open_reports_btn): controls.addWidget(b)
         controls.addStretch(1); root.addLayout(controls)
+        seller_controls = QHBoxLayout(); self.sellers_btn = QPushButton("Administrar sellers"); self.sellers_btn.clicked.connect(self._manage_report_sellers); seller_controls.addWidget(self.sellers_btn); seller_controls.addStretch(1); root.addLayout(seller_controls)
 
         stages = QGroupBox("Progreso"); sg = QGridLayout(stages); self.stage_labels = {}
         for i,(key,label) in enumerate((("epresis","Epresis"),("reportes","Reportes"),("visitas","Visitas"),("whatsapp","WhatsApp"))):
@@ -231,7 +234,7 @@ class MainWindow(QMainWindow):
 
     def _load_sellers_table(self):
         if not hasattr(self, "summary"): return
-        cfg=load_config(); sellers=cfg.get("sellers",[]); self.summary.setRowCount(len(sellers)+1)
+        cfg=apply_desktop_sellers(load_config()); sellers=cfg.get("sellers",[]); self.summary.setRowCount(len(sellers)+1)
         for r,s in enumerate(sellers):
             self.summary.setItem(r,0,QTableWidgetItem(str(s["seller"])))
             for c in (1,2,3): self.summary.setItem(r,c,QTableWidgetItem("—"))
@@ -239,7 +242,7 @@ class MainWindow(QMainWindow):
         for c in (1,2,3): self.summary.setItem(vr,c,QTableWidgetItem("—"))
 
     def _set_busy(self,busy:bool):
-        for b in (self.run_btn,self.dry_btn,self.settings_btn,self.login_btn): b.setEnabled(not busy)
+        for b in (self.run_btn,self.dry_btn,self.settings_btn,self.login_btn,self.sellers_btn): b.setEnabled(not busy)
         self.date.setEnabled(not busy)
 
     def _reset_stages(self):
@@ -257,16 +260,24 @@ class MainWindow(QMainWindow):
         if stage in values:self.progress.setValue(max(self.progress.value(),values[stage]))
         if stage=="pipeline" and status=="ok":self.progress.setValue(100)
 
+    def _manage_report_sellers(self):
+        ReportSellersDialog(self).exec()
+        self._load_sellers_table()
+
     def _start_pipeline(self,dry_run:bool):
         if not has_excel():
             QMessageBox.warning(self,"Microsoft Excel requerido","No se detectó Microsoft Excel de escritorio. SmartPost necesita Excel instalado para generar los reportes con la plantilla oficial."); return
-        cfg=load_config(); missing=[s["seller"] for s in cfg["sellers"] if s.get("enabled",True) and not str(s.get("whatsapp_group","")).strip()]
+        qd=self.date.date(); selected=datetime(qd.year(),qd.month(),qd.day())
+        cfg=apply_desktop_sellers(load_config()); scheduled=report_seller_configs(cfg, selected)
+        if not scheduled:
+            QMessageBox.warning(self,"Sin sellers","No hay sellers habilitados para la fecha seleccionada."); return
+        missing=[s["seller"] for s in scheduled if not str(s.get("whatsapp_group","")).strip()]
         if missing:
-            QMessageBox.warning(self,"Faltan grupos","Completá en Configuración los grupos de WhatsApp de:\n\n"+"\n".join(missing)); return
+            QMessageBox.warning(self,"Faltan grupos","Completá en Administrar sellers los grupos de WhatsApp de:\n\n"+"\n".join(missing)); return
         visits_cfg=cfg.get("visitas") or {}
         if visits_cfg.get("enabled",True) and not str(visits_cfg.get("whatsapp_group","")).strip():
             QMessageBox.warning(self,"Falta grupo de Visitas","Completá en Configuración el grupo de WhatsApp para VISITAS."); return
-        qd=self.date.date(); selected=datetime(qd.year(),qd.month(),qd.day()); self._reset_stages(); self.logs.clear(); self._set_busy(True)
+        self._reset_stages(); self.logs.clear(); self._set_busy(True)
         self.statusBar().showMessage("Ejecutando prueba…" if dry_run else "Ejecutando…")
         self.thread=QThread(self); self.worker=PipelineWorker(selected,dry_run); self.worker.moveToThread(self.thread)
         self.thread.started.connect(self.worker.run); self.worker.log_line.connect(self.logs.append); self.worker.stage.connect(self._stage); self.worker.finished.connect(self._pipeline_finished); self.worker.finished.connect(self.thread.quit)

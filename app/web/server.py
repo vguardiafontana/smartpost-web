@@ -60,6 +60,17 @@ class SearchGuidesBody(BaseModel):
     text: str = Field(default="", max_length=20000)
 
 
+class SellerBody(BaseModel):
+    original: str | None = None
+    seller: str = Field(min_length=1, max_length=100)
+    client: str = Field(min_length=1, max_length=200)
+    days: list[int] = Field(min_length=1, max_length=7)
+
+
+class SellerDeleteBody(BaseModel):
+    seller: str
+
+
 class ReportGenerateBody(BaseModel):
     date: str = Field(min_length=10, max_length=10)
 
@@ -189,6 +200,32 @@ def create_app(
     async def states(smartpost_session: str | None = Cookie(default=None, alias=COOKIE_NAME)) -> dict[str, Any]:
         require_auth(smartpost_session)
         return {"states": [{"id": sid, "label": label} for sid, label in STATES]}
+
+    @app.get("/api/report-sellers")
+    async def report_sellers(smartpost_session: str | None = Cookie(default=None, alias=COOKIE_NAME)):
+        require_auth(smartpost_session)
+        from app.web.report_sellers import list_sellers
+        return {"sellers": await asyncio.to_thread(list_sellers)}
+
+    @app.post("/api/report-sellers")
+    async def save_report_seller(body: SellerBody, smartpost_session: str | None = Cookie(default=None, alias=COOKIE_NAME)):
+        require_auth(smartpost_session)
+        from app.web.report_sellers import update_seller
+        try:
+            return {"sellers": await asyncio.to_thread(update_seller, body.original, body.seller, body.client, body.days)}
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        except KeyError as exc:
+            raise HTTPException(404, "Seller no encontrado") from exc
+
+    @app.post("/api/report-sellers/delete")
+    async def remove_report_seller(body: SellerDeleteBody, smartpost_session: str | None = Cookie(default=None, alias=COOKIE_NAME)):
+        require_auth(smartpost_session)
+        from app.web.report_sellers import delete_seller
+        try:
+            return {"sellers": await asyncio.to_thread(delete_seller, body.seller)}
+        except KeyError as exc:
+            raise HTTPException(404, "Seller no encontrado") from exc
 
     @app.post("/api/report-jobs")
     async def create_report_job(body: ReportGenerateBody, smartpost_session: str | None = Cookie(default=None, alias=COOKIE_NAME)) -> dict[str, Any]:

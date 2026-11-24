@@ -101,7 +101,7 @@ class EpresisAPI:
         if cfg.get("cliente_id"):
             return int(cfg["cliente_id"]), cfg.get("expected_empresa") or seller
         cached = cache.get(seller)
-        if cached and cached.get("cliente_id"):
+        if cached and cached.get("cliente_id") and not cfg.get("require_exact_client"):
             return int(cached["cliente_id"]), cached.get("empresa") or seller
 
         expected_exact = normalize_text(cfg.get("expected_empresa", ""))
@@ -135,7 +135,7 @@ class EpresisAPI:
             if len(matches) == 1:
                 return int(matches[0]["id"]), str(matches[0].get("empresa", ""))
         # Un solo candidato total: aceptable.
-        if len(candidates) == 1:
+        if len(candidates) == 1 and not cfg.get("require_exact_client"):
             return int(candidates[0]["id"]), str(candidates[0].get("empresa", ""))
         raise RuntimeError(
             f"No pude resolver cliente para {seller}. Candidatos: "

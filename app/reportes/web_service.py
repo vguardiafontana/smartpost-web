@@ -174,7 +174,8 @@ def _process_batch_portable(cfg: dict, run: RunContext, raw_files: list[Path], e
 
 def generate_reports_and_visits(selected_date: datetime, progress: Callable[[str, int, int], None] | None = None, requested_at: datetime | None = None) -> dict[str, Any]:
     requested_at = requested_at or business_now()
-    cfg = load_config()
+    from app.web.report_sellers import apply_report_sellers
+    cfg = apply_report_sellers(load_config())
     run_id = selected_date.strftime("web_reportes_%Y%m%d_") + datetime.now().strftime("%H%M%S")
     work_dir = resolve_path(cfg, "work") / run_id
     run = RunContext(run_id=run_id, selected_date=selected_date, work_dir=work_dir, dry_run=False)

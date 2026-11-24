@@ -1,0 +1,45 @@
+SMARTPOST - PARCHE ÚNICO ADMINISTRACIÓN DE SELLERS WEB + DESKTOP
+Base: smartpost-web-main.zip (commit eff08e11459c80722d9a1db70967fdc855a5b2dc).
+Incluye íntegramente el parche Web anterior y los cambios Desktop.
+
+1. Cerrá SmartPost. Conservá una copia de seguridad del repositorio y de
+   %APPDATA%\SmartPost\config.yaml (si existe). No borres perfiles ni sesiones.
+2. Descomprimí este ZIP en la raíz de tu repositorio SmartPost (donde están
+   desktop.py, web_server.py y las carpetas app, tests y packaging).
+   Aceptá reemplazar los archivos incluidos. No lo copies sobre Program Files.
+3. En PowerShell, desde esa raíz (repositorio Git válido, rama main):
+   git status
+   git add app tests/test_web_report_sellers.py tests/test_desktop_report_sellers.py packaging/RELEASE_NOTES.md
+   git commit -m "Administracion de sellers Web y Desktop"
+   git push origin main
+   Si git status muestra cambios ajenos al parche, revisalos antes de git add.
+   Si no es un repositorio Git, no hagas git init ni push --force: aplicá el parche
+   a una copia de trabajo de tu repositorio real.
+4. GitHub Actions: Build and release SmartPost Desktop debe finalizar correctamente.
+   Abrí https://github.com/vguardiafontana/smartpost-web/releases/latest
+   y verificá que sea el nuevo Release con las notas de administración de sellers.
+   Descargá SmartPost_Instalador.exe e instalalo sobre la instalación actual.
+   Si usás Desktop desde el código fuente, podés abrirlo como lo hacías antes.
+5. Web: verificá el despliegue en Render; cerrá y reabrí la PWA.
+
+DESKTOP: Reportes y Visitas > Administrar sellers. Agregá o editá nombre, cliente
+exacto en Precis, días, grupo exacto de WhatsApp y estado habilitado. El grupo
+es necesario para los sellers de la fecha seleccionada, como requiere el flujo
+actual. Los cambios se guardan localmente en config.yaml, sin tocar el catálogo
+base de otros módulos. Los nuevos grupos de Reportes se editan en este botón.
+La baja elimina al seller de Reportes, no sus reportes históricos ni los grupos
+externos. Los días se aplican a la fecha seleccionada. Los sellers existentes
+mantienen sábados, domingos y excepciones previas. Los nuevos empiezan Lun-Vie.
+Si no hay sellers habilitados ese día, se avisa y no se inicia el lote (el flujo
+existente requiere reportes para continuar hacia VISITAS).
+
+WEB: conserva la administración del parche anterior, con guardado en Neon
+si DATABASE_URL está configurada, o archivo local en caso contrario.
+Desktop y Web tienen configuraciones independientes: no se sincronizan.
+No hay horarios automáticos. Ejecutar sigue iniciando el flujo existente.
+
+PRUEBAS: 65 aprobadas y 1 omitida (interfaz PySide6 no instalada) en la suite
+seleccionada. Se añadió una comprobación al self-test del instalador Windows.
+No se generó instalador ni se publicó un Release desde este entorno; lo hará
+el workflow existente tras tu push si las pruebas y el empaquetado pasan.
+No se accedió a Precis, Neon, WhatsApp o Render de producción.
