@@ -10,6 +10,7 @@ from pathlib import Path
 from PySide6.QtCore import QObject, Signal, Slot
 
 from app.core.config import load_config, resolve_path
+from app.reportes.desktop_sellers import apply_desktop_sellers
 from app.core.logging import setup_logging
 from app.core.models import RunContext
 from app.core.state import StateDB
@@ -43,7 +44,7 @@ class PipelineWorker(QObject):
         run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
         state = None
         try:
-            cfg = load_config()
+            cfg = apply_desktop_sellers(load_config())
             work_dir = resolve_path(cfg, "work") / run_id
             ctx = RunContext(run_id=run_id, selected_date=self.selected_date, work_dir=work_dir, dry_run=self.dry_run)
             handler = GuiLogHandler(self.log_line.emit)
