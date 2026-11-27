@@ -5,12 +5,16 @@ from unittest.mock import AsyncMock
 import pytest
 
 
+_app_ref = None
+
+
 @pytest.fixture
 def gui(monkeypatch):
     monkeypatch.setenv('QT_QPA_PLATFORM', 'offscreen')
     from PySide6.QtWidgets import QApplication
-    app = QApplication.instance() or QApplication([])
-    yield app
+    global _app_ref
+    _app_ref = QApplication.instance() or QApplication([])
+    yield _app_ref
 
 
 def test_downloads_button_opens_the_complete_folder_in_explorer(gui, tmp_path, monkeypatch):
