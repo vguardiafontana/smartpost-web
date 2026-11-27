@@ -1243,7 +1243,7 @@ async def submit_gba_denuncia(
             logger.info("[DENUNCIAS] Chrome abierto con perfil dedicado persistente.")
         except Exception as exc:
             message = str(exc).lower()
-            if not ("executable doesn't exist" in message or "executable not found" in message or "chrome installation not found" in message):
+            if not ("executable doesn't exist" in message or "executable not found" in message or "chrome installation not found" in message or ("chrome" in message and "is not found at" in message)):
                 raise RuntimeError("No se pudo abrir el perfil de Chrome para Denuncias. Cerrá las ventanas de Chrome de SmartPost y reintentá. " + str(exc)) from exc
             logger.warning("[DENUNCIAS] Chrome no está instalado. Se usará el Chromium incluido con SmartPost.")
             chromium_profile.mkdir(parents=True, exist_ok=True)
