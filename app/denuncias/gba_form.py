@@ -1223,33 +1223,34 @@ async def submit_gba_denuncia(
     download_spool = output_dir / (".pw_download_" + datetime.now().strftime("%Y%m%d_%H%M%S_%f"))
     download_spool.mkdir(parents=True, exist_ok=True)
 
-    # Reuse a dedicated Provincia profile when possible. Besides preserving the
-    # normal browser state, this tends to make the manual reCAPTCHA less tedious
-    # than launching a brand-new incognito-style context on every complaint.
-    # If the profile is locked/corrupt after an interrupted run, fall back to a
-    # fresh browser automatically instead of freezing the workflow.
+    # Chrome has its own persistent profile, separate from Chromium's profile.
     async with async_playwright() as p:
         logger.info("[DENUNCIAS] Abriendo navegador de Provincia…")
-        profile = resolve_path(cfg, "denuncias_profile")
-        profile.mkdir(parents=True, exist_ok=True)
+        chromium_profile = resolve_path(cfg, "denuncias_profile")
+        chrome_profile = chromium_profile.with_name(chromium_profile.name + "_chrome")
+        chrome_profile.mkdir(parents=True, exist_ok=True)
         browser = None
-        persistent = False
         try:
             context = await p.chromium.launch_persistent_context(
-                user_data_dir=str(profile),
+                user_data_dir=str(chrome_profile),
+                channel="chrome",
                 headless=False,
                 downloads_path=str(download_spool),
                 accept_downloads=True,
                 viewport={"width": 1365, "height": 900},
                 timeout=30000,
             )
-            persistent = True
-            logger.info("[DENUNCIAS] Perfil de Provincia reutilizado.")
+            logger.info("[DENUNCIAS] Chrome abierto con perfil dedicado persistente.")
         except Exception as exc:
-            logger.warning("[DENUNCIAS] No pude reutilizar el perfil (%s). Uso navegador temporal.", exc)
-            browser = await p.chromium.launch(headless=False, downloads_path=str(download_spool), timeout=30000)
-            context = await browser.new_context(
-                accept_downloads=True, viewport={"width": 1365, "height": 900}
+            message = str(exc).lower()
+            if not ("executable doesn't exist" in message or "executable not found" in message or "chrome installation not found" in message):
+                raise RuntimeError("No se pudo abrir el perfil de Chrome para Denuncias. Cerrá las ventanas de Chrome de SmartPost y reintentá. " + str(exc)) from exc
+            logger.warning("[DENUNCIAS] Chrome no está instalado. Se usará el Chromium incluido con SmartPost.")
+            chromium_profile.mkdir(parents=True, exist_ok=True)
+            context = await p.chromium.launch_persistent_context(
+                user_data_dir=str(chromium_profile), headless=False,
+                downloads_path=str(download_spool), accept_downloads=True,
+                viewport={"width": 1365, "height": 900}, timeout=30000,
             )
         try:
             pages = list(context.pages)

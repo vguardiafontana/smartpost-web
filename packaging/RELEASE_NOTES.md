@@ -1,3 +1,8 @@
+SmartPost Desktop — navegador para Denuncias
+
+- Denuncias abre Google Chrome instalado con un perfil dedicado que conserva su sesión entre ejecuciones. Si Chrome no está instalado, usa el Chromium incluido.
+- Las verificaciones siguen siendo manuales y su duración depende de Google.
+
 SmartPost Desktop — fecha actual
 
 - Las fechas de Reportes, Cambio de estado v2 y Denuncias toman el día actual de Uruguay y se actualizan al cambiar de día si siguen en la fecha predeterminada.
