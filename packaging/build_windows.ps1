@@ -72,7 +72,21 @@ $env:SMARTPOST_WEB_PIN = "246810"
 $env:SMARTPOST_WEB_SESSION_SECRET = "ci-only-test-secret-0123456789012345678901234567890123456789"
 $env:QT_QPA_PLATFORM = "offscreen"
 $env:SMARTPOST_TEST_BROWSER = (& $Python -c "from playwright.sync_api import sync_playwright; p=sync_playwright().start(); print(p.chromium.executable_path); p.stop()")
-Invoke-Checked $Python -m pytest -q tests
+# Run Qt test modules in separate processes so native GUI teardown cannot
+# interfere with other modules or corrupt the exit status of the full suite.
+$QtTests = @(
+    "tests/test_date_defaults.py",
+    "tests/test_denuncias_buttons_v301.py",
+    "tests/test_desktop_report_sellers.py",
+    "tests/test_installer_release.py",
+    "tests/test_smartpost_v300.py",
+    "tests/test_visit_photos.py"
+)
+$IgnoreQtTests = @($QtTests | ForEach-Object { "--ignore=$_" })
+Invoke-Checked $Python -m pytest -q tests @IgnoreQtTests
+foreach ($QtTest in $QtTests) {
+    Invoke-Checked $Python -m pytest -q $QtTest
+}
 
 # Limpieza robusta del build anterior. El error WinError 5 suele ocurrir si SmartPost sigue abierto.
 Remove-TreeRobust (Join-Path $Root "build\SmartPost")
